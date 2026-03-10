@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getNewsBySource, NEWS_SOURCES } from "@/lib/news-scraper";
 
 export async function GET() {
-  const data = await getNewsBySource(4);
+  const data = await getNewsBySource(4, true);
 
   // 获取时间
   const now = new Date();

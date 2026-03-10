@@ -59,42 +59,42 @@ export default function Home() {
     fetchNews(category);
   }, [category, fetchNews]);
 
-  // 拉取每个来源的新闻
+  // 拉取每个来源的新闻 - 每2分钟自动刷新
   useEffect(() => {
-    setSourcesLoading(true);
-    fetch("/api/news/sources")
-      .then((r) => r.json())
-      .then((d) => setSources(d.sources || []))
-      .catch(() => setSources([]))
-      .finally(() => setSourcesLoading(false));
+    const fetchSources = () => {
+      setSourcesLoading(true);
+      fetch("/api/news/sources")
+        .then((r) => r.json())
+        .then((d) => setSources(d.sources || []))
+        .catch(() => setSources([]))
+        .finally(() => setSourcesLoading(false));
+    };
+    
+    fetchSources();
+    // 每2分钟刷新一次
+    const interval = setInterval(fetchSources, 2 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
-  // 拉取伊朗新闻 - 从所有新闻源获取并过滤
+  // 拉取伊朗新闻 - 从API获取（包含聚合数据国际新闻补充），每2分钟自动刷新
   useEffect(() => {
-    setIranLoading(true);
-    // 获取所有新闻，然后在客户端过滤伊朗相关
-    fetch("/api/news?category=all")
-      .then((r) => r.json())
-      .then((d) => {
-        const news = d.news || [];
-        // 过滤：只保留真正与伊朗局势相关的新闻
-        const iranWords = ['伊朗', '德黑兰', '中伊', '伊核', '波斯湾', '以色列'];
-        const iranKeywords = ['以色列', '中东', '核', '制裁', '石油', '革命卫队', '德黑兰', '波斯湾', '美军', '以军', '战争', '导弹', '袭击', '中伊', '伊核', '伊朗核', '核谈判', '哈梅内伊', '莱希'];
-        const filtered = news.filter((item: NewsItem) => {
-          const text = (item.title + ' ' + (item.description || '')).toLowerCase();
-          // 必须包含伊朗相关词
-          const hasIran = iranWords.some(w => text.includes(w.toLowerCase()));
-          if (!hasIran) return false;
-          // 排除商业新闻
-          if (text.includes('客户') || text.includes('订单') || text.includes('出口贸易')) return false;
-          // 且包含局势相关关键词
-          return iranKeywords.some(kw => text.includes(kw.toLowerCase()));
-        });
-        setIranNews(filtered.slice(0, 8));
-        setIranFetchTime(d.fetchTime || new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }));
-      })
-      .catch(() => setIranNews([]))
-      .finally(() => setIranLoading(false));
+    const fetchIranNews = () => {
+      setIranLoading(true);
+      // 使用专门的伊朗新闻API端点，包含聚合数据国际新闻补充
+      fetch("/api/news?iran=true")
+        .then((r) => r.json())
+        .then((d) => {
+          setIranNews(d.news || []);
+          setIranFetchTime(d.fetchTime || new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }));
+        })
+        .catch(() => setIranNews([]))
+        .finally(() => setIranLoading(false));
+    };
+    
+    fetchIranNews();
+    // 每2分钟刷新一次
+    const interval = setInterval(fetchIranNews, 2 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
 
   // 拉取钉钉新闻 - 从Brave Search API获取，每2分钟自动刷新

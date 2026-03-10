@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getNewsBySource, NEWS_SOURCES } from "@/lib/news-scraper";
+import { getNewsBySource, NEWS_SOURCES, fetchJuheNews } from "@/lib/news-scraper";
 import type { NewsItem } from "@/lib/brave-search";
 
 export async function GET(request: NextRequest) {
@@ -8,38 +8,86 @@ export async function GET(request: NextRequest) {
   const query = searchParams.get("q") || "";
   const ding = searchParams.get("ding") === "true";
   const ant = searchParams.get("ant") === "true";
+  const iran = searchParams.get("iran") === "true";
 
   try {
-    // 如果请求蚂蚁集团新闻，从多个科技媒体获取并过滤
-    if (ant) {
-      const sourceNews = await getNewsBySource(20);
+    // 如果请求伊朗新闻，从所有新闻源中过滤 + 聚合数据API国际新闻补充
+    if (iran) {
+      const [sourceNews, juheNews] = await Promise.all([
+        getNewsBySource(20),
+        fetchJuheNews("guoji"), // 国际新闻可能包含伊朗相关内容
+      ]);
       
-      // 找到蚂蚁集团相关的数据（ant1, ant2, ant3, ant4, ant5, ant6）
-      let antNews: NewsItem[] = [];
-      
-      // 从专门的蚂蚁源获取
-      for (const source of sourceNews) {
-        if (source.sourceId.startsWith('ant') && source.ok && source.items.length > 0) {
-          antNews = antNews.concat(source.items);
-        }
-      }
-      
-      // 同时从所有新闻源中过滤蚂蚁集团相关内容（作为补充）
+      // 从所有新闻源中过滤伊朗相关内容
       let allNews: NewsItem[] = [];
       for (const source of sourceNews) {
         if (source.ok && source.items.length > 0) {
           allNews = allNews.concat(source.items);
         }
       }
+      
+      // 添加聚合数据国际新闻作为补充
+      allNews = allNews.concat(juheNews);
+      
+      const iranKeywords = ['伊朗', '德黑兰', '中伊', '伊核', '波斯湾', '哈梅内伊', '莱希', '鲁哈尼', '什叶派', '阿亚图拉', '伊朗革命卫队', '伊朗核'];
+      const filteredNews = allNews.filter((item) => {
+        const text = (item.title + ' ' + (item.description || '')).toLowerCase();
+        return iranKeywords.some(kw => text.includes(kw.toLowerCase()));
+      });
+      
+      // 去重
+      const seen = new Set<string>();
+      const mergedNews = filteredNews.filter(item => {
+        const key = item.title.toLowerCase().trim();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      
+      const now = new Date();
+      const fetchTime = now.toLocaleString('zh-CN', { 
+        month: '2-digit', 
+        day: '2-digit', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+      
+      return NextResponse.json({
+        news: mergedNews.slice(0, 15).map(item => ({ ...item, fetchedAt: fetchTime })),
+        category: "iran",
+        query: "伊朗局势",
+        timestamp: now.toISOString(),
+        fetchTime,
+      });
+    }
+
+    // 如果请求蚂蚁集团新闻，从所有新闻源中过滤 + 聚合数据API补充
+    if (ant) {
+      const [sourceNews, juheNews] = await Promise.all([
+        getNewsBySource(20),
+        fetchJuheNews("caijing"), // 财经新闻可能包含蚂蚁集团相关内容
+      ]);
+      
+      // 从所有新闻源中过滤蚂蚁集团相关内容
+      let allNews: NewsItem[] = [];
+      for (const source of sourceNews) {
+        if (source.ok && source.items.length > 0) {
+          allNews = allNews.concat(source.items);
+        }
+      }
+      
+      // 添加聚合数据新闻作为补充
+      allNews = allNews.concat(juheNews);
+      
       const antKeywords = ['蚂蚁集团', '蚂蚁金服', '支付宝', 'Alipay', '蚂蚁', '花呗', '借呗', '余额宝', '芝麻信用', '蚂蚁链', '蚂蚁森林', '蚂蚁庄园', '蚂蚁借呗', '蚂蚁保险', '蚂蚁财富', '网商银行', '天弘基金'];
       const filteredNews = allNews.filter((item) => {
         const text = (item.title + ' ' + (item.description || '')).toLowerCase();
         return antKeywords.some(kw => text.includes(kw.toLowerCase()));
       });
       
-      // 合并并去重
+      // 去重
       const seen = new Set<string>();
-      const mergedNews = [...antNews, ...filteredNews].filter(item => {
+      const mergedNews = filteredNews.filter(item => {
         const key = item.title.toLowerCase().trim();
         if (seen.has(key)) return false;
         seen.add(key);
@@ -63,37 +111,34 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 如果请求钉钉新闻，从多个科技媒体获取并过滤
+    // 如果请求钉钉新闻，从所有新闻源中过滤 + 聚合数据API补充
     if (ding) {
       // 获取更多新闻源以覆盖过去一周的内容
-      const sourceNews = await getNewsBySource(20);
+      const [sourceNews, juheNews] = await Promise.all([
+        getNewsBySource(20),
+        fetchJuheNews("keji"), // 科技新闻可能包含钉钉相关内容
+      ]);
       
-      // 找到钉钉相关的数据（dingtalk, dingtalk2, dingtalk3, dingtalk4, dingtalk5）
-      let dingNews: NewsItem[] = [];
-      
-      // 从专门的钉钉源获取
-      for (const source of sourceNews) {
-        if (source.sourceId.startsWith('dingtalk') && source.ok && source.items.length > 0) {
-          dingNews = dingNews.concat(source.items);
-        }
-      }
-      
-      // 同时从科技类新闻源中过滤钉钉相关内容（作为补充）
+      // 从所有新闻源中过滤钉钉相关内容
       let allNews: NewsItem[] = [];
       for (const source of sourceNews) {
         if (source.ok && source.items.length > 0) {
           allNews = allNews.concat(source.items);
         }
       }
+      
+      // 添加聚合数据新闻作为补充
+      allNews = allNews.concat(juheNews);
+      
       const dingKeywords = ['钉钉', 'DingTalk', 'dingtalk', '阿里钉钉', '钉钉文档', '钉钉会议', '钉钉打卡', '钉钉审批', '钉钉直播', '钉钉机器人', '钉钉开放平台', '钉钉宜搭', '钉钉酷应用'];
       const filteredNews = allNews.filter((item) => {
         const text = (item.title + ' ' + (item.description || '')).toLowerCase();
         return dingKeywords.some(kw => text.includes(kw.toLowerCase()));
       });
       
-      // 合并并去重
+      // 去重
       const seen = new Set<string>();
-      const mergedNews = [...dingNews, ...filteredNews].filter(item => {
+      const mergedNews = filteredNews.filter(item => {
         const key = item.title.toLowerCase().trim();
         if (seen.has(key)) return false;
         seen.add(key);

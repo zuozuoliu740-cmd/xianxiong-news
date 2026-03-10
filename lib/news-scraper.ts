@@ -54,7 +54,7 @@ const SCRAPER_SOURCES: Record<
           description: "来自 36氪 的科技商业资讯",
           url,
           source: "36氪",
-          publishedAt: "today",
+          publishedAt: new Date().toISOString(),
           category: "all",
         };
       },
@@ -74,7 +74,7 @@ const SCRAPER_SOURCES: Record<
           description: "来自虎嗅的商业资讯",
           url: url || "https://www.huxiu.com",
           source: "虎嗅",
-          publishedAt: "today",
+          publishedAt: new Date().toISOString(),
           category: "all",
         };
       },
@@ -87,6 +87,7 @@ const SCRAPER_SOURCES: Record<
         const title = $(el).find("title").first().text().trim();
         const link = $(el).find("link").first().text().trim() || $(el).find("guid").first().text().trim();
         const desc = $(el).find("description").first().text().replace(/<[^>]*>/g, "").trim().slice(0, 100);
+        const pubDate = $(el).find("pubDate").first().text().trim();
         if (!title || title.length < 5) return null;
         return {
           id: `zaobao-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -94,7 +95,7 @@ const SCRAPER_SOURCES: Record<
           description: desc || "来自联合早报的国际资讯",
           url: link || "https://www.zaobao.com.sg",
           source: "联合早报",
-          publishedAt: "today",
+          publishedAt: pubDate || new Date().toISOString(),
           category: "all",
         };
       },
@@ -116,7 +117,7 @@ const SCRAPER_SOURCES: Record<
           description: "来自少数派的科技资讯",
           url: url || "https://sspai.com",
           source: "少数派",
-          publishedAt: "today",
+          publishedAt: new Date().toISOString(),
           category: "tech",
         };
       },
@@ -136,7 +137,7 @@ const SCRAPER_SOURCES: Record<
           description: "来自 36氪 的科技资讯",
           url: url || "https://36kr.com",
           source: "36氪",
-          publishedAt: "today",
+          publishedAt: new Date().toISOString(),
           category: "tech",
         };
       },
@@ -158,7 +159,7 @@ const SCRAPER_SOURCES: Record<
           description: "来自虎嗅的商业资讯",
           url: url || "https://www.huxiu.com",
           source: "虎嗅",
-          publishedAt: "today",
+          publishedAt: new Date().toISOString(),
           category: "business",
         };
       },
@@ -178,7 +179,7 @@ const SCRAPER_SOURCES: Record<
           description: "来自 36氪 的商业资讯",
           url: url || "https://36kr.com",
           source: "36氪",
-          publishedAt: "today",
+          publishedAt: new Date().toISOString(),
           category: "business",
         };
       },
@@ -200,7 +201,7 @@ const SCRAPER_SOURCES: Record<
           description: "来自澎湃新闻的时事资讯",
           url: url || "https://www.thepaper.cn",
           source: "澎湃新闻",
-          publishedAt: "today",
+          publishedAt: new Date().toISOString(),
           category: "politics",
         };
       },
@@ -220,7 +221,7 @@ const SCRAPER_SOURCES: Record<
           description: desc || "来自联合早报的国际时事",
           url: link || "https://www.zaobao.com.sg",
           source: "联合早报",
-          publishedAt: "today",
+          publishedAt: new Date().toISOString(),
           category: "politics",
         };
       },
@@ -240,7 +241,7 @@ const SCRAPER_SOURCES: Record<
           description: desc || "来自环球时报的国际资讯",
           url: link || "https://www.globaltimes.cn",
           source: "环球时报",
-          publishedAt: "today",
+          publishedAt: new Date().toISOString(),
           category: "politics",
         };
       },
@@ -260,7 +261,7 @@ const SCRAPER_SOURCES: Record<
           description: "来自 36氪 的资讯",
           url: url || "https://36kr.com",
           source: "36氪",
-          publishedAt: "today",
+          publishedAt: new Date().toISOString(),
           category: "politics",
         };
       },
@@ -388,14 +389,12 @@ export interface SourceDef {
 }
 
 export const NEWS_SOURCES: SourceDef[] = [
-  { id: "xinhua",   label: "新华网",       desc: "官方权威",   icon: "🇨🇳", url: "https://www.xinhuanet.com",       color: "from-red-50 to-red-100 border-red-200",        textColor: "text-red-700",    cat: "politics" },
   { id: "people",   label: "人民网",       desc: "时政要闻",   icon: "📰", url: "https://www.people.com.cn",      color: "from-red-50 to-red-100 border-red-200",        textColor: "text-red-700",    cat: "politics" },
-  { id: "cctvworld", label: "央视网",      desc: "国际新闻",   icon: "📺", url: "https://news.cctv.com",         color: "from-blue-50 to-blue-100 border-blue-200",      textColor: "text-blue-700",   cat: "politics" },
-  { id: "cankao",   label: "参考消息",     desc: "国际视野",   icon: "🌍", url: "https://www.cankaoxiaoxi.com",  color: "from-green-50 to-green-100 border-green-200",   textColor: "text-green-700",  cat: "politics" },
   { id: "gt",       label: "环球时报",     desc: "国际视角",   icon: "🌐", url: "https://www.globaltimes.cn",     color: "from-teal-50 to-teal-100 border-teal-200",      textColor: "text-teal-700",   cat: "politics" },
   { id: "chinadaily", label: "中国日报",   desc: "国际英文",   icon: "🌏", url: "https://www.chinadaily.com.cn",   color: "from-emerald-50 to-emerald-100 border-emerald-200", textColor: "text-emerald-700", cat: "all" },
-  { id: "dingtalk", label: "钉钉官网",     desc: "企业协作",   icon: "💬", url: "https://www.dingtalk.com",       color: "from-blue-50 to-indigo-100 border-blue-200",    textColor: "text-blue-700",   cat: "ding" },
+
   { id: "36kr",     label: "36氪",        desc: "科技商业",   icon: "🚀", url: "https://www.36kr.com",           color: "from-blue-50 to-blue-100 border-blue-200",      textColor: "text-blue-700",   cat: "business" },
+
   { id: "ithome",   label: "IT之家",       desc: "科技数码",   icon: "💻", url: "https://www.ithome.com",          color: "from-sky-50 to-sky-100 border-sky-200",      textColor: "text-sky-700",   cat: "tech" },
   { id: "tmtpost",  label: "钛媒体",       desc: "科技财经",   icon: "🔩", url: "https://www.tmtpost.com",         color: "from-amber-50 to-amber-100 border-amber-200", textColor: "text-amber-700", cat: "business" },
   { id: "woshipm",  label: "人人都是产品经理", desc: "产品运营",   icon: "🎯", url: "https://www.woshipm.com",         color: "from-violet-50 to-violet-100 border-violet-200", textColor: "text-violet-700", cat: "business" },
@@ -403,6 +402,7 @@ export const NEWS_SOURCES: SourceDef[] = [
   { id: "sspai",    label: "少数派",       desc: "中文科技",   icon: "📱", url: "https://sspai.com",              color: "from-purple-50 to-purple-100 border-purple-200", textColor: "text-purple-700", cat: "tech" },
   { id: "ifanr",    label: "爱范儿",       desc: "科技生活",   icon: "❤️",  url: "https://www.ifanr.com",          color: "from-pink-50 to-pink-100 border-pink-200",      textColor: "text-pink-700",   cat: "tech" },
   { id: "leiphone", label: "雷锋网",       desc: "智能创新",   icon: "⚡️", url: "https://www.leiphone.com",        color: "from-yellow-50 to-yellow-100 border-yellow-200", textColor: "text-yellow-700", cat: "tech" },
+  { id: "juhe",     label: "聚合数据",     desc: "头条新闻",   icon: "📰", url: "https://www.juhe.cn",             color: "from-orange-50 to-orange-100 border-orange-200", textColor: "text-orange-700", cat: "all" },
 ];
 
 // 单个来源抓取配置（同 SCRAPER_SOURCES 但以 sourceId 为 key）
@@ -414,8 +414,9 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const title = $(el).find("title").first().text().trim();
       const link = $(el).find("link").first().text().trim() || $(el).find("guid").first().text().trim();
       const desc = $(el).find("description").first().text().replace(/<[^>]*>/g, "").trim().slice(0, 100);
+      const pubDate = $(el).find("pubDate").first().text().trim();
       if (!title || title.length < 5) return null;
-      return { id: `ithome-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://www.ithome.com", source: "IT之家", publishedAt: "today", category: "tech" };
+      return { id: `ithome-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://www.ithome.com", source: "IT之家", publishedAt: pubDate || new Date().toISOString(), category: "tech" };
     },
   },
   "sspai": {
@@ -425,8 +426,9 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const title = $(el).find("title").first().text().trim();
       const link = $(el).find("link").first().text().trim() || $(el).find("guid").first().text().trim();
       const desc = $(el).find("description").first().text().replace(/<[^>]*>/g, "").trim().slice(0, 100);
+      const pubDate = $(el).find("pubDate").first().text().trim();
       if (!title || title.length < 5) return null;
-      return { id: `sspai-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://sspai.com", source: "少数派", publishedAt: "today", category: "tech" };
+      return { id: `sspai-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://sspai.com", source: "少数派", publishedAt: pubDate || new Date().toISOString(), category: "tech" };
     },
   },
   "ifanr": {
@@ -436,8 +438,9 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const title = $(el).find("title").first().text().trim();
       const link = $(el).find("link").first().text().trim() || $(el).find("guid").first().text().trim();
       const desc = $(el).find("description").first().text().replace(/<[^>]*>/g, "").trim().slice(0, 100);
+      const pubDate = $(el).find("pubDate").first().text().trim();
       if (!title || title.length < 5) return null;
-      return { id: `ifanr-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://www.ifanr.com", source: "爱范儿", publishedAt: "today", category: "tech" };
+      return { id: `ifanr-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://www.ifanr.com", source: "爱范儿", publishedAt: pubDate || new Date().toISOString(), category: "tech" };
     },
   },
   "leiphone": {
@@ -447,8 +450,9 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const title = $(el).find("title").first().text().trim();
       const link = $(el).find("link").first().text().trim() || $(el).find("guid").first().text().trim();
       const desc = $(el).find("description").first().text().replace(/<[^>]*>/g, "").trim().slice(0, 100);
+      const pubDate = $(el).find("pubDate").first().text().trim();
       if (!title || title.length < 5) return null;
-      return { id: `leiphone-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://www.leiphone.com", source: "雷锋网", publishedAt: "today", category: "tech" };
+      return { id: `leiphone-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://www.leiphone.com", source: "雷锋网", publishedAt: pubDate || new Date().toISOString(), category: "tech" };
     },
   },
   "chinadaily": {
@@ -460,8 +464,9 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const link = $(el).find("link").first().text().trim() || $(el).find("guid").first().text().trim();
       const rawDesc = $(el).find("description").first().text();
       const desc = rawDesc.replace(/<[^>]*>/g, "").replace(/^<!\[CDATA\[|\]\]>$/gi, "").trim().slice(0, 100);
+      const pubDate = $(el).find("pubDate").first().text().trim();
       if (!title || title.length < 3) return null;
-      return { id: `chinadaily-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://www.chinadaily.com.cn", source: "中国日报", publishedAt: "today", category: "all" };
+      return { id: `chinadaily-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://www.chinadaily.com.cn", source: "中国日报", publishedAt: pubDate || new Date().toISOString(), category: "all" };
     },
   },
   "gt": {
@@ -471,8 +476,9 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const title = $(el).find("title").first().text().trim();
       const link = $(el).find("link").first().text().trim() || $(el).find("guid").first().text().trim();
       const desc = $(el).find("description").first().text().replace(/<[^>]*>/g, "").trim().slice(0, 100);
+      const pubDate = $(el).find("pubDate").first().text().trim();
       if (!title || title.length < 5) return null;
-      return { id: `gt-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://www.globaltimes.cn", source: "环球时报", publishedAt: "today", category: "politics" };
+      return { id: `gt-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://www.globaltimes.cn", source: "环球时报", publishedAt: pubDate || new Date().toISOString(), category: "politics" };
     },
   },
   "tmtpost": {
@@ -482,8 +488,9 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const title = $(el).find("title").first().text().trim();
       const link = $(el).find("link").first().text().trim() || $(el).find("guid").first().text().trim();
       const desc = $(el).find("description").first().text().replace(/<[^>]*>/g, "").trim().slice(0, 100);
+      const pubDate = $(el).find("pubDate").first().text().trim();
       if (!title || title.length < 5) return null;
-      return { id: `tmtpost-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://www.tmtpost.com", source: "钛媒体", publishedAt: "today", category: "business" };
+      return { id: `tmtpost-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://www.tmtpost.com", source: "钛媒体", publishedAt: pubDate || new Date().toISOString(), category: "business" };
     },
   },
   "woshipm": {
@@ -493,8 +500,9 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const title = $(el).find("title").first().text().trim();
       const link = $(el).find("link").first().text().trim() || $(el).find("guid").first().text().trim();
       const desc = $(el).find("description").first().text().replace(/<[^>]*>/g, "").trim().slice(0, 100);
+      const pubDate = $(el).find("pubDate").first().text().trim();
       if (!title || title.length < 5) return null;
-      return { id: `woshipm-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://www.woshipm.com", source: "人人都是产品经理", publishedAt: "today", category: "business" };
+      return { id: `woshipm-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://www.woshipm.com", source: "人人都是产品经理", publishedAt: pubDate || new Date().toISOString(), category: "business" };
     },
   },
   "data199": {
@@ -504,20 +512,9 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const title = $(el).find("title").first().text().trim();
       const link = $(el).find("link").first().text().trim() || $(el).find("guid").first().text().trim();
       const desc = $(el).find("description").first().text().replace(/<[^>]*>/g, "").trim().slice(0, 100);
+      const pubDate = $(el).find("pubDate").first().text().trim();
       if (!title || title.length < 5) return null;
-      return { id: `data199-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://www.199it.com", source: "199IT", publishedAt: "today", category: "all" };
-    },
-  },
-  // 新华网 - 网页抓取
-  "xinhua": {
-    url: "https://www.xinhuanet.com",
-    selector: ".tit a, .headline a, .news-list a",
-    parser: ($, el) => {
-      const title = $(el).text().trim();
-      const href = $(el).attr("href") || "";
-      if (!title || title.length < 5 || title.includes("新华网")) return null;
-      const url = href.startsWith("http") ? href : `https://www.xinhuanet.com${href}`;
-      return { id: `xinhua-s-${Math.random().toString(36).substr(2,9)}`, title, description: "来自新华网的权威资讯", url: url || "https://www.xinhuanet.com", source: "新华网", publishedAt: "today", category: "politics" };
+      return { id: `data199-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://www.199it.com", source: "199IT", publishedAt: pubDate || new Date().toISOString(), category: "all" };
     },
   },
   // 36氪 - RSS
@@ -528,8 +525,9 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const title = $(el).find("title").first().text().trim();
       const link = $(el).find("link").first().text().trim() || $(el).find("guid").first().text().trim();
       const desc = $(el).find("description").first().text().replace(/<[^>]*>/g, "").trim().slice(0, 100);
+      const pubDate = $(el).find("pubDate").first().text().trim();
       if (!title || title.length < 5) return null;
-      return { id: `36kr-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "来自36氪的科技商业资讯", url: link || "https://www.36kr.com", source: "36氪", publishedAt: "today", category: "business" };
+      return { id: `36kr-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "来自36氪的科技商业资讯", url: link || "https://www.36kr.com", source: "36氪", publishedAt: pubDate || new Date().toISOString(), category: "business" };
     },
   },
   // 虎嗅 - RSS
@@ -540,8 +538,9 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const title = $(el).find("title").first().text().trim();
       const link = $(el).find("link").first().text().trim() || $(el).find("guid").first().text().trim();
       const desc = $(el).find("description").first().text().replace(/<[^>]*>/g, "").trim().slice(0, 100);
+      const pubDate = $(el).find("pubDate").first().text().trim();
       if (!title || title.length < 5) return null;
-      return { id: `huxiu-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "来自虎嗅的商业洞察", url: link || "https://www.huxiu.com", source: "虎嗅", publishedAt: "today", category: "business" };
+      return { id: `huxiu-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "来自虎嗅的商业洞察", url: link || "https://www.huxiu.com", source: "虎嗅", publishedAt: pubDate || new Date().toISOString(), category: "business" };
     },
   },
   // 极客公园 - RSS
@@ -552,20 +551,9 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const title = $(el).find("title").first().text().trim();
       const link = $(el).find("link").first().text().trim() || $(el).find("guid").first().text().trim();
       const desc = $(el).find("description").first().text().replace(/<[^>]*>/g, "").trim().slice(0, 100);
+      const pubDate = $(el).find("pubDate").first().text().trim();
       if (!title || title.length < 5) return null;
-      return { id: `geekpark-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "来自极客公园的科技资讯", url: link || "https://www.geekpark.net", source: "极客公园", publishedAt: "today", category: "tech" };
-    },
-  },
-  // 参考消息 - 国际新闻
-  "cankao": {
-    url: "https://www.cankaoxiaoxi.com/china/index.shtml",
-    selector: "a.news-title, .news-list a, .list-item a",
-    parser: ($, el) => {
-      const title = $(el).text().trim();
-      const href = $(el).attr("href") || "";
-      if (!title || title.length < 5) return null;
-      const url = href.startsWith("http") ? href : `https://www.cankaoxiaoxi.com${href}`;
-      return { id: `cankao-s-${Math.random().toString(36).substr(2,9)}`, title, description: "来自参考消息的国际资讯", url: url || "https://www.cankaoxiaoxi.com", source: "参考消息", publishedAt: "today", category: "politics" };
+      return { id: `geekpark-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "来自极客公园的科技资讯", url: link || "https://www.geekpark.net", source: "极客公园", publishedAt: pubDate || new Date().toISOString(), category: "tech" };
     },
   },
   // 人民网 - 时政
@@ -576,20 +564,9 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const title = $(el).find("title").first().text().trim();
       const link = $(el).find("link").first().text().trim() || $(el).find("guid").first().text().trim();
       const desc = $(el).find("description").first().text().replace(/<[^>]*>/g, "").trim().slice(0, 100);
+      const pubDate = $(el).find("pubDate").first().text().trim();
       if (!title || title.length < 5) return null;
-      return { id: `people-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "来自人民网的时政资讯", url: link || "https://www.people.com.cn", source: "人民网", publishedAt: "today", category: "politics" };
-    },
-  },
-  // 央视网 - 国际
-  "cctvworld": {
-    url: "https://news.cctv.com/world/",
-    selector: "a, .news-item a, .list-item a, h3 a, h2 a",
-    parser: ($, el) => {
-      const title = $(el).text().trim();
-      const href = $(el).attr("href") || "";
-      if (!title || title.length < 5 || title.includes("央视网") || title.includes("CCTV")) return null;
-      const url = href.startsWith("http") ? href : `https://news.cctv.com${href}`;
-      return { id: `cctvworld-s-${Math.random().toString(36).substr(2,9)}`, title, description: "来自央视网的国际资讯", url: url || "https://news.cctv.com", source: "央视网", publishedAt: "today", category: "politics" };
+      return { id: `people-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "来自人民网的时政资讯", url: link || "https://www.people.com.cn", source: "人民网", publishedAt: pubDate || new Date().toISOString(), category: "politics" };
     },
   },
   // 钉钉官网 - 产品动态（从多个科技媒体RSS过滤）
@@ -608,7 +585,8 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const isDingRelated = dingKeywords.some(kw => text.includes(kw.toLowerCase()));
       
       if (!title || title.length < 5 || !isDingRelated) return null;
-      return { id: `dingtalk-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "钉钉相关资讯", url: link || "https://www.dingtalk.com", source: "钉钉资讯", publishedAt: "today", category: "ding" };
+      const pubDate = $(el).find("pubDate").first().text().trim();
+      return { id: `dingtalk-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "钉钉相关资讯", url: link || "https://www.dingtalk.com", source: "钉钉资讯", publishedAt: pubDate || new Date().toISOString(), category: "ding" };
     },
   },
   // 钉钉资讯 - 钛媒体
@@ -626,7 +604,8 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const isDingRelated = dingKeywords.some(kw => text.includes(kw.toLowerCase()));
       
       if (!title || title.length < 5 || !isDingRelated) return null;
-      return { id: `dingtalk2-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "钉钉相关资讯", url: link || "https://www.dingtalk.com", source: "钛媒体", publishedAt: "today", category: "ding" };
+      const pubDate = $(el).find("pubDate").first().text().trim();
+      return { id: `dingtalk2-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "钉钉相关资讯", url: link || "https://www.dingtalk.com", source: "钛媒体", publishedAt: pubDate || new Date().toISOString(), category: "ding" };
     },
   },
   // 钉钉资讯 - 雷锋网
@@ -644,7 +623,8 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const isDingRelated = dingKeywords.some(kw => text.includes(kw.toLowerCase()));
       
       if (!title || title.length < 5 || !isDingRelated) return null;
-      return { id: `dingtalk3-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "钉钉相关资讯", url: link || "https://www.dingtalk.com", source: "雷锋网", publishedAt: "today", category: "ding" };
+      const pubDate = $(el).find("pubDate").first().text().trim();
+      return { id: `dingtalk3-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "钉钉相关资讯", url: link || "https://www.dingtalk.com", source: "雷锋网", publishedAt: pubDate || new Date().toISOString(), category: "ding" };
     },
   },
   // 钉钉资讯 - IT之家
@@ -662,7 +642,8 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const isDingRelated = dingKeywords.some(kw => text.includes(kw.toLowerCase()));
       
       if (!title || title.length < 5 || !isDingRelated) return null;
-      return { id: `dingtalk4-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "钉钉相关资讯", url: link || "https://www.ithome.com", source: "IT之家", publishedAt: "today", category: "ding" };
+      const pubDate = $(el).find("pubDate").first().text().trim();
+      return { id: `dingtalk4-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "钉钉相关资讯", url: link || "https://www.ithome.com", source: "IT之家", publishedAt: pubDate || new Date().toISOString(), category: "ding" };
     },
   },
   // 钉钉资讯 - 爱范儿
@@ -680,7 +661,8 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const isDingRelated = dingKeywords.some(kw => text.includes(kw.toLowerCase()));
       
       if (!title || title.length < 5 || !isDingRelated) return null;
-      return { id: `dingtalk5-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "钉钉相关资讯", url: link || "https://www.ifanr.com", source: "爱范儿", publishedAt: "today", category: "ding" };
+      const pubDate = $(el).find("pubDate").first().text().trim();
+      return { id: `dingtalk5-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "钉钉相关资讯", url: link || "https://www.ifanr.com", source: "爱范儿", publishedAt: pubDate || new Date().toISOString(), category: "ding" };
     },
   },
   // 蚂蚁集团资讯 - 36氪
@@ -698,7 +680,8 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const isAntRelated = antKeywords.some(kw => text.includes(kw.toLowerCase()));
       
       if (!title || title.length < 5 || !isAntRelated) return null;
-      return { id: `ant1-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "蚂蚁集团相关资讯", url: link || "https://www.antgroup.com", source: "36氪", publishedAt: "today", category: "ant" };
+      const pubDate = $(el).find("pubDate").first().text().trim();
+      return { id: `ant1-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "蚂蚁集团相关资讯", url: link || "https://www.antgroup.com", source: "36氪", publishedAt: pubDate || new Date().toISOString(), category: "ant" };
     },
   },
   // 蚂蚁集团资讯 - 钛媒体
@@ -716,7 +699,8 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const isAntRelated = antKeywords.some(kw => text.includes(kw.toLowerCase()));
       
       if (!title || title.length < 5 || !isAntRelated) return null;
-      return { id: `ant2-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "蚂蚁集团相关资讯", url: link || "https://www.antgroup.com", source: "钛媒体", publishedAt: "today", category: "ant" };
+      const pubDate = $(el).find("pubDate").first().text().trim();
+      return { id: `ant2-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "蚂蚁集团相关资讯", url: link || "https://www.antgroup.com", source: "钛媒体", publishedAt: pubDate || new Date().toISOString(), category: "ant" };
     },
   },
   // 蚂蚁集团资讯 - 雷锋网
@@ -734,7 +718,8 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const isAntRelated = antKeywords.some(kw => text.includes(kw.toLowerCase()));
       
       if (!title || title.length < 5 || !isAntRelated) return null;
-      return { id: `ant3-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "蚂蚁集团相关资讯", url: link || "https://www.antgroup.com", source: "雷锋网", publishedAt: "today", category: "ant" };
+      const pubDate = $(el).find("pubDate").first().text().trim();
+      return { id: `ant3-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "蚂蚁集团相关资讯", url: link || "https://www.antgroup.com", source: "雷锋网", publishedAt: pubDate || new Date().toISOString(), category: "ant" };
     },
   },
   // 蚂蚁集团资讯 - IT之家
@@ -752,7 +737,8 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const isAntRelated = antKeywords.some(kw => text.includes(kw.toLowerCase()));
       
       if (!title || title.length < 5 || !isAntRelated) return null;
-      return { id: `ant4-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "蚂蚁集团相关资讯", url: link || "https://www.ithome.com", source: "IT之家", publishedAt: "today", category: "ant" };
+      const pubDate = $(el).find("pubDate").first().text().trim();
+      return { id: `ant4-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "蚂蚁集团相关资讯", url: link || "https://www.ithome.com", source: "IT之家", publishedAt: pubDate || new Date().toISOString(), category: "ant" };
     },
   },
   // 蚂蚁集团资讯 - 爱范儿
@@ -770,7 +756,8 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       const isAntRelated = antKeywords.some(kw => text.includes(kw.toLowerCase()));
       
       if (!title || title.length < 5 || !isAntRelated) return null;
-      return { id: `ant5-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "蚂蚁集团相关资讯", url: link || "https://www.ifanr.com", source: "爱范儿", publishedAt: "today", category: "ant" };
+      const pubDate = $(el).find("pubDate").first().text().trim();
+      return { id: `ant5-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "蚂蚁集团相关资讯", url: link || "https://www.ifanr.com", source: "爱范儿", publishedAt: pubDate || new Date().toISOString(), category: "ant" };
     },
   },
   // 蚂蚁集团官网 - 新闻动态
@@ -784,10 +771,45 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       
       if (!title || title.length < 5) return null;
       const fullUrl = link.startsWith("http") ? link : `https://www.antgroup.com${link}`;
-      return { id: `ant6-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "蚂蚁集团新闻", url: fullUrl, source: "蚂蚁集团官网", publishedAt: "today", category: "ant" };
+      const pubDate = $(el).find(".date, .time, .pub-date").first().text().trim();
+      return { id: `ant6-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "蚂蚁集团新闻", url: fullUrl, source: "蚂蚁集团官网", publishedAt: pubDate || new Date().toISOString(), category: "ant" };
     },
   },
 };
+
+// ---- 聚合数据 API 抓取 ----
+export async function fetchJuheNews(newsType: string = "top"): Promise<NewsItem[]> {
+  // 优先从环境变量读取，否则使用硬编码的 API Key
+  const apiKey = process.env.JUHE_API_KEY || "73de630ba83f999df435c7ccfb44daf1";
+  if (!apiKey) {
+    console.warn("JUHE_API_KEY not set, skipping Juhe news");
+    return [];
+  }
+  
+  try {
+    const response = await fetch(`http://v.juhe.cn/toutiao/index?type=${newsType}&key=${apiKey}`);
+    const data = await response.json();
+    
+    if (data.error_code !== 0) {
+      console.warn("Juhe API error:", data.reason);
+      return [];
+    }
+    
+    const articles = data.result?.data || [];
+    return articles.map((item: any) => ({
+      id: `juhe-${item.uniquekey || Math.random().toString(36).substr(2, 9)}`,
+      title: item.title,
+      description: item.description || item.abstract || "来自聚合数据的新闻",
+      url: item.url,
+      source: item.author_name || "聚合数据",
+      publishedAt: item.date || new Date().toISOString(),
+      category: "all",
+    })).filter((item: NewsItem) => item.title && item.title.length >= 5);
+  } catch (error) {
+    console.error("Failed to fetch Juhe news:", error);
+    return [];
+  }
+}
 
 export interface SourceNews {
   sourceId: string;
@@ -796,7 +818,7 @@ export interface SourceNews {
 }
 
 /** 并发抓取所有来源的 Top N 新闻 */
-export async function getNewsBySource(limit: number = 4): Promise<SourceNews[]> {
+export async function getNewsBySource(limit: number = 4, useShortCache: boolean = false): Promise<SourceNews[]> {
   const cacheKey = `by-source:${limit}`;
   const cached = getCache(cacheKey);
   if (cached) {
@@ -864,9 +886,23 @@ export async function getNewsBySource(limit: number = 4): Promise<SourceNews[]> 
     r.status === "fulfilled" ? r.value : { sourceId: NEWS_SOURCES[i].id, items: [], ok: false }
   );
 
+  // 获取聚合数据新闻并合并
+  try {
+    const juheNews = await fetchJuheNews();
+    if (juheNews.length > 0) {
+      data.push({
+        sourceId: "juhe",
+        items: juheNews.slice(0, limit),
+        ok: true,
+      });
+    }
+  } catch (error) {
+    console.error("Failed to fetch Juhe news in getNewsBySource:", error);
+  }
+
   // 写缓存（flat 压平存）
   const flat = data.flatMap(d => d.items);
-  if (flat.length > 0) setCache(cacheKey, flat);
+  if (flat.length > 0) setCache(cacheKey, flat, useShortCache ? SHORT_CACHE_TTL : CACHE_TTL);
 
   return data;
 }
