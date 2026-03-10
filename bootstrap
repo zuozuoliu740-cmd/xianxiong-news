@@ -1,0 +1,12 @@
+#!/bin/bash
+export PORT=9000
+export NODE_ENV=production
+export HOSTNAME=0.0.0.0
+
+# 找到 node 并启动
+if command -v node &> /dev/null; then
+  exec node /code/server.js
+else
+  # 尝试 /usr/local/bin/node
+  exec /usr/local/bin/node /code/server.js
+fi
