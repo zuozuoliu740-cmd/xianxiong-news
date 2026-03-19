@@ -4,13 +4,12 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
 
 type SwapType = "product" | "clothing" | "model";
-type Step = "upload" | "details" | "generating" | "preview";
 
 interface UploadedFile {
   file: File;
   preview: string;
   id: string;
-  serverUrl?: string; // 上传到服务器后的URL
+  serverUrl?: string;
   uploading?: boolean;
 }
 
@@ -36,19 +35,18 @@ const GRADIENTS = [
 ];
 
 export default function ProductSwapPage() {
-  const [step, setStep] = useState<Step>("upload");
   const [swapType, setSwapType] = useState<SwapType>("product");
   const [video, setVideo] = useState<UploadedFile | null>(null);
   const [productImages, setProductImages] = useState<UploadedFile[]>([]);
   const [progress, setProgress] = useState(0);
+  const [generating, setGenerating] = useState(false);
   const [resultReady, setResultReady] = useState(false);
   const [productDesc, setProductDesc] = useState("");
   const [englishDesc, setEnglishDesc] = useState("");
   const [needEnglish, setNeedEnglish] = useState(false);
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
   const [isGeneratingEnDesc, setIsGeneratingEnDesc] = useState(false);
-  const [showMyVideos, setShowMyVideos] = useState(false);
-  const [editingVideoId, setEditingVideoId] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
   const [historyVideos, setHistoryVideos] = useState<HistoryVideo[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -58,11 +56,13 @@ export default function ProductSwapPage() {
   const [uploadingImages, setUploadingImages] = useState(false);
   const [uploadedVideoUrl, setUploadedVideoUrl] = useState<string | null>(null);
   const [uploadedImageUrls, setUploadedImageUrls] = useState<string[]>([]);
+  const [showShareMenu, setShowShareMenu] = useState(false);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
 
-  // 加载历史记录
+  // ---- API Logic (unchanged) ----
   const fetchHistory = useCallback(async () => {
     setHistoryLoading(true);
     try {
@@ -75,9 +75,9 @@ export default function ProductSwapPage() {
 
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
-  // 轮询视频生成进度
+  // Poll video generation progress
   useEffect(() => {
-    if (step === "generating" && taskId) {
+    if (generating && taskId) {
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(async () => {
         try {
@@ -87,9 +87,8 @@ export default function ProductSwapPage() {
           if (data.status === "completed") {
             if (timerRef.current) clearInterval(timerRef.current);
             setResultReady(true);
+            setGenerating(false);
             setResultVideoUrl(data.resultUrl || null);
-            setStep("preview");
-            // 保存历史记录
             const typeLabels = { product: "商品", clothing: "服饰", model: "模特" };
             fetch("/api/ai-lab/history", {
               method: "POST",
@@ -104,31 +103,22 @@ export default function ProductSwapPage() {
                 originalVideoUrl: uploadedVideoUrl,
               }),
             }).then(() => fetchHistory());
+            setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth" }), 300);
           } else if (data.status === "failed") {
             if (timerRef.current) clearInterval(timerRef.current);
             setApiError(data.error || "视频生成失败");
-            setStep("details");
+            setGenerating(false);
           }
-        } catch { /* retry on next tick */ }
+        } catch { /* retry */ }
       }, 1500);
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [step, taskId]);
+  }, [generating, taskId]);
 
-  // Reset progress when leaving generating step manually
-  const handleStepClick = (s: Step) => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    if (s === "generating") {
-      setProgress(0);
-      setResultReady(false);
-    }
-    setStep(s);
-  };
-
-  const swapTypes: { id: SwapType; label: string; icon: string; desc: string }[] = [
-    { id: "product", label: "商品替换", icon: "🛍️", desc: "替换视频中的商品展示" },
-    { id: "clothing", label: "服饰替换", icon: "👗", desc: "替换模特身上的服饰" },
-    { id: "model", label: "模特替换", icon: "🧑", desc: "替换视频中的模特面部" },
+  const swapTypes: { id: SwapType; label: string; icon: string }[] = [
+    { id: "product", label: "商品替换", icon: "🛍️" },
+    { id: "clothing", label: "服饰替换", icon: "👗" },
+    { id: "model", label: "模特替换", icon: "🧑" },
   ];
 
   const handleVideoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -160,10 +150,7 @@ export default function ProductSwapPage() {
   const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     const newImages = files.slice(0, 5 - productImages.length).map((file) => ({
-      file,
-      preview: URL.createObjectURL(file),
-      id: crypto.randomUUID(),
-      uploading: true,
+      file, preview: URL.createObjectURL(file), id: crypto.randomUUID(), uploading: true,
     }));
     setProductImages((prev) => [...prev, ...newImages].slice(0, 5));
     if (imageInputRef.current) imageInputRef.current.value = "";
@@ -181,7 +168,7 @@ export default function ProductSwapPage() {
           urls.push(data.url);
           setProductImages((prev) => prev.map(p => p.id === img.id ? { ...p, serverUrl: data.url, uploading: false } : p));
         }
-      } catch { /* ignore single failure */ }
+      } catch { /* ignore */ }
     }
     setUploadedImageUrls((prev) => [...prev, ...urls]);
     setUploadingImages(false);
@@ -198,14 +185,7 @@ export default function ProductSwapPage() {
   const removeVideo = () => {
     if (video) URL.revokeObjectURL(video.preview);
     setVideo(null);
-  };
-
-  const canProceedToDetails = productImages.length > 0;
-  const canGenerate = productImages.length > 0 && productDesc.trim().length > 0;
-
-  const handleGoToDetails = () => {
-    setStep("details");
-    if (!productDesc) handleGenerateDesc();
+    setUploadedVideoUrl(null);
   };
 
   const handleGenerateDesc = async () => {
@@ -215,18 +195,11 @@ export default function ProductSwapPage() {
       const res = await fetch("/api/ai-lab/generate-desc", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          swapType,
-          imageCount: productImages.length,
-          hasVideo: !!video,
-        }),
+        body: JSON.stringify({ swapType, imageCount: productImages.length, hasVideo: !!video }),
       });
       const data = await res.json();
-      if (data.success) {
-        setProductDesc(data.desc);
-      } else {
-        setApiError(data.error || "文案生成失败");
-      }
+      if (data.success) setProductDesc(data.desc);
+      else setApiError(data.error || "文案生成失败");
     } catch (err: any) {
       setApiError("文案生成失败: " + (err.message || "网络错误"));
     }
@@ -243,20 +216,19 @@ export default function ProductSwapPage() {
         body: JSON.stringify({ text: productDesc }),
       });
       const data = await res.json();
-      if (data.success) {
-        setEnglishDesc(data.translation);
-      } else {
-        setApiError(data.error || "翻译失败");
-      }
+      if (data.success) setEnglishDesc(data.translation);
+      else setApiError(data.error || "翻译失败");
     } catch (err: any) {
       setApiError("翻译失败: " + (err.message || "网络错误"));
     }
     setIsGeneratingEnDesc(false);
   };
 
+  const canGenerate = productImages.length > 0 && productDesc.trim().length > 0 && !generating;
+
   const handleGenerate = async () => {
     if (timerRef.current) clearInterval(timerRef.current);
-    setStep("generating");
+    setGenerating(true);
     setProgress(0);
     setResultReady(false);
     setResultVideoUrl(null);
@@ -266,24 +238,21 @@ export default function ProductSwapPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          videoUrl: uploadedVideoUrl,
-          imageUrls: uploadedImageUrls,
-          desc: productDesc,
-          swapType,
-          needEnglish,
-          englishDesc,
+          videoUrl: uploadedVideoUrl, imageUrls: uploadedImageUrls,
+          desc: productDesc, swapType, needEnglish, englishDesc,
         }),
       });
       const data = await res.json();
       if (data.success) {
         setTaskId(data.taskId);
+        setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth" }), 300);
       } else {
         setApiError(data.error || "创建视频任务失败");
-        setStep("details");
+        setGenerating(false);
       }
     } catch (err: any) {
       setApiError("创建视频任务失败: " + (err.message || "网络错误"));
-      setStep("details");
+      setGenerating(false);
     }
   };
 
@@ -292,9 +261,9 @@ export default function ProductSwapPage() {
     productImages.forEach((img) => URL.revokeObjectURL(img.preview));
     setVideo(null);
     setProductImages([]);
-    setStep("upload");
     setProgress(0);
     setResultReady(false);
+    setGenerating(false);
     setProductDesc("");
     setEnglishDesc("");
     setNeedEnglish(false);
@@ -305,211 +274,219 @@ export default function ProductSwapPage() {
     setApiError(null);
   };
 
+  // ---- Render ----
   return (
     <div className="min-h-screen bg-[#f7f8fa] dark:bg-[#0d1117]">
-      {/* Header */}
-      <header className="sticky top-0 z-20 border-b border-[#e5e6eb]/50 bg-white/80 backdrop-blur-xl dark:border-[#30363d]/50 dark:bg-[#161b22]/80">
-        <div className="mx-auto flex max-w-6xl items-center gap-4 px-5 py-3.5">
-          <Link href="/ai-lab" className="flex items-center gap-2 text-[#86909c] hover:text-[#1d2129] dark:text-[#8b949e] dark:hover:text-[#e6edf3] transition-colors">
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            <span className="text-sm">AI实验室</span>
+      {/* === Header === */}
+      <header className="sticky top-0 z-30 border-b border-[#e5e6eb]/60 bg-white/80 backdrop-blur-xl dark:border-[#30363d]/50 dark:bg-[#161b22]/80">
+        <div className="mx-auto flex max-w-[1200px] items-center px-5 py-2.5">
+          <Link href="/ai-lab" className="flex items-center gap-1.5 text-[#86909c] hover:text-[#1d2129] dark:text-[#8b949e] dark:hover:text-[#e6edf3] transition-colors">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+            <span className="text-xs">AI实验室</span>
           </Link>
+          <div className="mx-3 h-4 w-px bg-[#e5e6eb] dark:bg-[#30363d]" />
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#7c3aed] to-[#a855f7]">
-              <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#7c3aed] to-[#a855f7]">
+              <svg className="h-3.5 w-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
             </div>
             <span className="text-sm font-bold text-[#1d2129] dark:text-[#e6edf3]">AI爆品替换</span>
           </div>
-          {/* Step indicator + My Videos */}
           <div className="ml-auto flex items-center gap-2">
             <button
-              onClick={() => setShowMyVideos(!showMyVideos)}
-              className={`mr-2 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${showMyVideos ? "bg-[#7c3aed] text-white shadow-md shadow-[#7c3aed]/20" : "bg-[#f7f8fa] text-[#86909c] hover:bg-[#7c3aed]/10 hover:text-[#7c3aed] dark:bg-[#21262d] dark:text-[#8b949e]"}`}
+              onClick={() => setShowHistory(!showHistory)}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${showHistory ? "bg-[#7c3aed] text-white shadow-md shadow-[#7c3aed]/20" : "bg-[#f7f8fa] text-[#86909c] hover:bg-[#7c3aed]/10 hover:text-[#7c3aed] dark:bg-[#21262d] dark:text-[#8b949e]"}`}
             >
               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
               我的
             </button>
-            {(["upload", "details", "generating", "preview"] as Step[]).map((s, i) => {
-              const labels = ["上传素材", "内容详情", "AI生成", "效果预览"];
-              const isActive = step === s;
-              const isDone = ["upload", "details", "generating", "preview"].indexOf(step) > i;
+          </div>
+        </div>
+      </header>
+
+      {/* === Step Indicator === */}
+      {!showHistory && (
+        <div className="border-b border-[#e5e6eb]/40 bg-white/60 backdrop-blur-sm dark:border-[#30363d]/30 dark:bg-[#161b22]/60">
+          <div className="mx-auto flex max-w-[1200px] items-center justify-center gap-0 px-5 py-3">
+            {[
+              { num: 1, label: "上传视频", done: !!video },
+              { num: 2, label: "上传商品图", done: productImages.length > 0 },
+              { num: 3, label: "商品文案", done: productDesc.trim().length > 0 },
+              { num: 4, label: "AI生成", done: resultReady },
+              { num: 5, label: "分享发布", done: false },
+            ].map((s, i, arr) => {
+              const isActive = !s.done && (i === 0 || arr[i - 1].done);
+              const isCurrent = generating && s.num === 4;
               return (
-                <div key={s} className="flex items-center gap-2">
-                  {i > 0 && <div className={`h-px w-6 ${isDone ? "bg-[#7c3aed]" : "bg-[#e5e6eb] dark:bg-[#30363d]"}`} />}
-                  <button
-                    onClick={() => handleStepClick(s)}
-                    className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all cursor-pointer hover:opacity-80 ${isActive ? "bg-[#7c3aed] text-white" : isDone ? "bg-[#7c3aed]/10 text-[#7c3aed]" : "bg-[#f7f8fa] text-[#86909c] dark:bg-[#21262d] dark:text-[#8b949e]"}`}
-                  >
-                    <span>{i + 1}</span>
-                    <span className="hidden sm:inline">{labels[i]}</span>
-                  </button>
+                <div key={s.num} className="flex items-center">
+                  <div className="flex flex-col items-center gap-1">
+                    <div className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold transition-all ${
+                      s.done
+                        ? "bg-[#7c3aed] text-white shadow-md shadow-[#7c3aed]/20"
+                        : isCurrent
+                        ? "animate-pulse bg-gradient-to-r from-[#7c3aed] to-[#ec4899] text-white shadow-md"
+                        : isActive
+                        ? "border-2 border-[#7c3aed] text-[#7c3aed] bg-white dark:bg-[#0d1117]"
+                        : "border border-[#e5e6eb] text-[#c9cdd4] bg-[#f7f8fa] dark:border-[#30363d] dark:bg-[#21262d] dark:text-[#484f58]"
+                    }`}>
+                      {s.done ? (
+                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                      ) : s.num}
+                    </div>
+                    <span className={`text-[10px] font-medium whitespace-nowrap ${
+                      s.done ? "text-[#7c3aed]" : isActive || isCurrent ? "text-[#1d2129] dark:text-[#e6edf3]" : "text-[#c9cdd4] dark:text-[#484f58]"
+                    }`}>{s.label}</span>
+                  </div>
+                  {i < arr.length - 1 && (
+                    <div className={`mx-2 h-px w-8 sm:w-12 transition-colors ${
+                      s.done ? "bg-[#7c3aed]" : "bg-[#e5e6eb] dark:bg-[#30363d]"
+                    }`} />
+                  )}
                 </div>
               );
             })}
           </div>
         </div>
-      </header>
+      )}
 
-      <div className="mx-auto max-w-6xl px-5 py-6">
-        {/* ===== API Error Toast ===== */}
-        {apiError && (
-          <div className="mb-4 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
-            <svg className="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+      {/* === Error Banner === */}
+      {apiError && (
+        <div className="mx-auto max-w-[1200px] px-5 pt-3">
+          <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
+            <svg className="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             <span className="flex-1">{apiError}</span>
-            <button onClick={() => setApiError(null)} className="flex-shrink-0 text-red-400 hover:text-red-600 dark:hover:text-red-200">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
+            <button onClick={() => setApiError(null)} className="text-red-400 hover:text-red-600"><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* ===== My Videos Panel ===== */}
-        {showMyVideos && (
-          <div className="space-y-6">
+      <div className="mx-auto max-w-[1200px] px-5 py-4">
+        {/* === 我的视频 Panel === */}
+        {showHistory && (
+          <div className="space-y-5">
             <div className="flex items-center justify-between">
               <h2 className="flex items-center gap-2 text-lg font-bold text-[#1d2129] dark:text-[#e6edf3]">
                 <svg className="h-5 w-5 text-[#7c3aed]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
                 我的视频
                 <span className="text-sm font-normal text-[#86909c]">({historyVideos.length}个)</span>
               </h2>
-              <button
-                onClick={() => { setShowMyVideos(false); handleReset(); }}
-                className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#7c3aed] to-[#ec4899] px-5 py-2 text-xs font-semibold text-white shadow-md shadow-[#7c3aed]/20 transition-all hover:shadow-lg hover:scale-105"
-              >
+              <button onClick={() => { setShowHistory(false); handleReset(); }}
+                className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#7c3aed] to-[#ec4899] px-5 py-2 text-xs font-semibold text-white shadow-md shadow-[#7c3aed]/20 transition-all hover:shadow-lg hover:scale-105">
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                 新建视频
               </button>
             </div>
 
-            {/* Video Grid */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {historyLoading ? (
-              <div className="col-span-full flex items-center justify-center py-16">
-                <svg className="h-6 w-6 animate-spin text-[#7c3aed]" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+            {historyLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <svg className="h-6 w-6 animate-spin text-[#7c3aed]" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
                 <span className="ml-2 text-sm text-[#86909c]">加载中...</span>
               </div>
             ) : historyVideos.length === 0 ? (
-              <div className="col-span-full flex flex-col items-center justify-center py-16 text-[#86909c]">
-                <svg className="mb-3 h-12 w-12 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                <p className="text-sm">暂无视频记录</p>
-                <p className="mt-1 text-xs">点击右上角"新建视频"开始创作</p>
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[#e5e6eb] py-20 dark:border-[#30363d]">
+                <svg className="mb-3 h-12 w-12 text-[#c9cdd4] dark:text-[#484f58]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                <p className="text-sm text-[#86909c]">暂无视频记录</p>
+                <p className="mt-1 text-xs text-[#c9cdd4]">点击右上角「新建视频」开始创作</p>
               </div>
-            ) : historyVideos.map((v, vi) => (
-                <div key={v.id} className="group overflow-hidden rounded-2xl border border-[#e5e6eb]/50 bg-white shadow-[0_2px_12px_0_rgba(0,0,0,0.04)] transition-all hover:shadow-lg hover:-translate-y-0.5 dark:border-[#30363d]/50 dark:bg-[#161b22]">
-                  {/* Thumbnail */}
-                  <div className={`relative flex h-44 items-center justify-center bg-gradient-to-br ${GRADIENTS[vi % GRADIENTS.length]}`}>
-                    <svg className="h-12 w-12 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/10 opacity-0 transition-opacity group-hover:opacity-100">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg"><svg className="ml-0.5 h-5 w-5 text-[#7c3aed]" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg></div>
-                    </div>
-                    {/* Duration badge */}
-                    <div className="absolute bottom-2 right-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">{v.duration}</div>
-                    {/* Status badge */}
-                    {v.status === "processing" && (
-                      <div className="absolute left-2 top-2 flex items-center gap-1 rounded-md bg-[#f97316] px-2 py-0.5 text-[10px] font-semibold text-white">
-                        <svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                        生成中
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {historyVideos.map((v, vi) => (
+                  <div key={v.id} className="group overflow-hidden rounded-2xl border border-[#e5e6eb]/50 bg-white shadow-[0_2px_12px_0_rgba(0,0,0,0.04)] transition-all hover:shadow-lg hover:-translate-y-0.5 dark:border-[#30363d]/50 dark:bg-[#161b22]">
+                    {/* Thumbnail */}
+                    <div className={`relative flex h-40 items-center justify-center bg-gradient-to-br ${GRADIENTS[vi % GRADIENTS.length]}`}>
+                      <svg className="h-10 w-10 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/10 opacity-0 transition-opacity group-hover:opacity-100">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white/90 shadow-lg"><svg className="ml-0.5 h-5 w-5 text-[#7c3aed]" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg></div>
                       </div>
-                    )}
-                    {v.status === "completed" && v.hasEnglish && (
-                      <div className="absolute left-2 top-2 rounded-md bg-[#3370ff]/90 px-2 py-0.5 text-[10px] font-semibold text-white">🌐 双语</div>
-                    )}
-                  </div>
-                  {/* Info */}
-                  <div className="p-4">
-                    <h4 className="mb-1 truncate text-sm font-semibold text-[#1d2129] dark:text-[#e6edf3]">{v.title}</h4>
-                    <p className="mb-3 text-xs text-[#86909c] line-clamp-1">{v.desc}</p>
-                    <div className="mb-3 flex items-center gap-2 text-[10px] text-[#86909c]">
-                      <span className={`rounded-full px-2 py-0.5 font-medium ${v.type === "product" ? "bg-[#7c3aed]/10 text-[#7c3aed]" : v.type === "clothing" ? "bg-[#ec4899]/10 text-[#ec4899]" : "bg-[#f97316]/10 text-[#f97316]"}`}>
-                        {v.type === "product" ? "🛍️ 商品" : v.type === "clothing" ? "👗 服饰" : "🧑 模特"}
-                      </span>
-                      <span>{v.createdAt}</span>
-                    </div>
-                    {/* Action Buttons */}
-                    <div className="flex gap-2">
-                      {v.status === "completed" ? (
-                        <>
-                          <button className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[#7c3aed] to-[#a855f7] py-2 text-xs font-medium text-white transition-all hover:shadow-md">
-                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                            下载
-                          </button>
-                          <button
-                            onClick={() => {
-                              setEditingVideoId(v.id);
-                              setSwapType(v.type);
-                              setProductDesc(v.desc);
-                              setNeedEnglish(v.hasEnglish);
-                              setShowMyVideos(false);
-                              setStep("details");
-                            }}
-                            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#e5e6eb] bg-white py-2 text-xs font-medium text-[#1d2129] transition-all hover:border-[#7c3aed]/30 hover:text-[#7c3aed] dark:border-[#30363d] dark:bg-[#21262d] dark:text-[#e6edf3]"
-                          >
-                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                            二次编辑
-                          </button>
-                        </>
-                      ) : (
-                        <div className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#f7f8fa] py-2 text-xs text-[#86909c] dark:bg-[#21262d]">
-                          <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                          正在生成，请稍候...
+                      <div className="absolute bottom-2 right-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">{v.duration}</div>
+                      {v.status === "processing" && (
+                        <div className="absolute left-2 top-2 flex items-center gap-1 rounded-md bg-[#f97316] px-2 py-0.5 text-[10px] font-semibold text-white">
+                          <svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                          生成中
                         </div>
                       )}
+                      {v.status === "completed" && v.hasEnglish && (
+                        <div className="absolute left-2 top-2 rounded-md bg-[#3370ff]/90 px-2 py-0.5 text-[10px] font-semibold text-white">🌐 双语</div>
+                      )}
+                    </div>
+                    {/* Info */}
+                    <div className="p-4">
+                      <h4 className="mb-1 truncate text-sm font-semibold text-[#1d2129] dark:text-[#e6edf3]">{v.title}</h4>
+                      <p className="mb-3 text-xs text-[#86909c] line-clamp-1">{v.desc}</p>
+                      <div className="mb-3 flex items-center gap-2 text-[10px] text-[#86909c]">
+                        <span className={`rounded-full px-2 py-0.5 font-medium ${v.type === "product" ? "bg-[#7c3aed]/10 text-[#7c3aed]" : v.type === "clothing" ? "bg-[#ec4899]/10 text-[#ec4899]" : "bg-[#f97316]/10 text-[#f97316]"}`}>
+                          {v.type === "product" ? "🛍️ 商品" : v.type === "clothing" ? "👗 服饰" : "🧑 模特"}
+                        </span>
+                        <span>{v.createdAt}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        {v.status === "completed" ? (
+                          <>
+                            <button className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[#7c3aed] to-[#a855f7] py-2 text-xs font-medium text-white transition-all hover:shadow-md">
+                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                              下载
+                            </button>
+                            <button onClick={() => { setSwapType(v.type); setProductDesc(v.desc); setNeedEnglish(v.hasEnglish); setShowHistory(false); }}
+                              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#e5e6eb] bg-white py-2 text-xs font-medium text-[#1d2129] transition-all hover:border-[#7c3aed]/30 hover:text-[#7c3aed] dark:border-[#30363d] dark:bg-[#21262d] dark:text-[#e6edf3]">
+                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                              二次编辑
+                            </button>
+                          </>
+                        ) : (
+                          <div className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#f7f8fa] py-2 text-xs text-[#86909c] dark:bg-[#21262d]">
+                            <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                            正在生成，请稍候...
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {/* ===== Step: Upload ===== */}
-        {!showMyVideos && step === "upload" && (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {/* Left: Video Upload */}
-            <div className="rounded-2xl border border-[#e5e6eb]/50 bg-white p-6 shadow-[0_2px_12px_0_rgba(0,0,0,0.04)] dark:border-[#30363d]/50 dark:bg-[#161b22]">
-              <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-[#1d2129] dark:text-[#e6edf3]">
-                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-[#7c3aed] to-[#a855f7] text-[10px] font-bold text-white">1</span>
-                上传原始视频
-                <span className="text-xs font-normal text-[#86909c]">（可选）</span>
-              </h3>
+        {/* === Main Workspace: 2-Column Layout === */}
+        {!showHistory && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+          {/* ---- Left Column: Upload ---- */}
+          <div className="space-y-4 lg:col-span-4">
+            {/* Swap Type Selector */}
+            <div className="rounded-2xl border border-[#e5e6eb]/60 bg-white p-4 shadow-sm dark:border-[#30363d]/50 dark:bg-[#161b22]">
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#86909c]">替换类型</h3>
+              <div className="flex gap-2">
+                {swapTypes.map((t) => (
+                  <button key={t.id} onClick={() => setSwapType(t.id)}
+                    className={`flex flex-1 flex-col items-center gap-1 rounded-xl border-2 py-2.5 text-xs font-medium transition-all ${swapType === t.id ? "border-[#7c3aed] bg-[#7c3aed]/5 text-[#7c3aed] dark:border-[#a855f7] dark:text-[#a78bfa]" : "border-[#e5e6eb] text-[#4e5969] hover:border-[#7c3aed]/30 dark:border-[#30363d] dark:text-[#8b949e]"}`}
+                  >
+                    <span className="text-base">{t.icon}</span>
+                    <span>{t.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
 
+            {/* Video Upload */}
+            <div className="rounded-2xl border border-[#e5e6eb]/60 bg-white p-4 shadow-sm dark:border-[#30363d]/50 dark:bg-[#161b22]">
+              <h3 className="mb-3 flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-[#86909c]">
+                原始视频 <span className="text-[10px] font-normal normal-case">可选</span>
+              </h3>
               {!video ? (
-                <div
-                  onClick={() => videoInputRef.current?.click()}
-                  className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#e5e6eb] bg-[#f7f8fa]/50 py-16 transition-all hover:border-[#7c3aed]/50 hover:bg-[#7c3aed]/5 dark:border-[#30363d] dark:bg-[#0d1117]/50 dark:hover:border-[#7c3aed]/50"
-                >
-                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#7c3aed]/10 to-[#a855f7]/10">
-                    <svg className="h-8 w-8 text-[#7c3aed]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                  <p className="mb-1 text-sm font-medium text-[#1d2129] dark:text-[#e6edf3]">点击上传视频</p>
-                  <p className="text-xs text-[#86909c]">支持 MP4 / MOV，最大 200MB，60秒以内</p>
-                  <p className="mt-2 text-[10px] text-[#7c3aed]/80">💡 无视频也可，仅凭商品图+文案即可生成推广视频</p>
+                <div onClick={() => videoInputRef.current?.click()}
+                  className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#e5e6eb] bg-[#f7f8fa]/50 py-8 transition-all hover:border-[#7c3aed]/50 hover:bg-[#7c3aed]/5 dark:border-[#30363d] dark:bg-[#0d1117]/50">
+                  <svg className="mb-2 h-8 w-8 text-[#c9cdd4] dark:text-[#484f58]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                  <p className="text-xs font-medium text-[#4e5969] dark:text-[#8b949e]">点击上传视频</p>
+                  <p className="mt-1 text-[10px] text-[#86909c]">MP4 / MOV, 最大200MB</p>
                 </div>
               ) : (
                 <div className="relative overflow-hidden rounded-xl bg-black">
-                  <video src={video.preview} controls className="w-full rounded-xl" style={{ maxHeight: 320 }} />
-                  <button
-                    onClick={removeVideo}
-                    className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors hover:bg-red-500"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                  <video src={video.preview} controls className="w-full" style={{ maxHeight: 180 }} />
+                  <button onClick={removeVideo} className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white hover:bg-red-500 transition-colors">
+                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
-                  <div className="absolute bottom-2 left-2 rounded-lg bg-black/60 px-2.5 py-1 text-xs text-white backdrop-blur-sm">
-                    {video.file.name}
-                  </div>
                   {uploadingVideo && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-                      <div className="flex items-center gap-2 rounded-lg bg-black/70 px-3 py-2 text-xs text-white">
-                        <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                        上传中...
-                      </div>
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                      <svg className="h-5 w-5 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
                     </div>
                   )}
                 </div>
@@ -517,312 +494,191 @@ export default function ProductSwapPage() {
               <input ref={videoInputRef} type="file" accept="video/mp4,video/quicktime" className="hidden" onChange={handleVideoUpload} />
             </div>
 
-            {/* Right: Product Images + Config */}
-            <div className="space-y-6">
-              {/* Product Images */}
-              <div className="rounded-2xl border border-[#e5e6eb]/50 bg-white p-6 shadow-[0_2px_12px_0_rgba(0,0,0,0.04)] dark:border-[#30363d]/50 dark:bg-[#161b22]">
-                <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-[#1d2129] dark:text-[#e6edf3]">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-[#ec4899] to-[#f97316] text-[10px] font-bold text-white">2</span>
-                  上传商品图片
-                  <span className="text-xs font-normal text-[#86909c]">（{productImages.length}/5张）</span>
-                </h3>
-
-                <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
-                  {productImages.map((img) => (
-                    <div key={img.id} className="group relative aspect-square overflow-hidden rounded-xl border border-[#e5e6eb]/50 dark:border-[#30363d]/50">
-                      <img src={img.preview} alt="" className="h-full w-full object-cover" />
-                      {img.uploading && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl">
-                          <svg className="h-5 w-5 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                        </div>
-                      )}
-                      <button
-                        onClick={() => removeImage(img.id)}
-                        className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                      >
-                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  ))}
-                  {productImages.length < 5 && (
-                    <div
-                      onClick={() => imageInputRef.current?.click()}
-                      className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#e5e6eb] bg-[#f7f8fa]/50 transition-all hover:border-[#ec4899]/50 hover:bg-[#ec4899]/5 dark:border-[#30363d] dark:bg-[#0d1117]/50"
-                    >
-                      <svg className="h-6 w-6 text-[#86909c]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                      <span className="mt-1 text-[10px] text-[#86909c]">添加图片</span>
-                    </div>
-                  )}
-                </div>
-                <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageUpload} />
-                <p className="mt-3 text-xs text-[#86909c]">支持 PNG/JPG，建议上传多角度商品图以获得更好效果</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Next Button */}
-        {!showMyVideos && step === "upload" && (
-          <div className="mt-8 flex justify-center">
-            <button
-              onClick={handleGoToDetails}
-              disabled={!canProceedToDetails}
-              className={`flex items-center gap-3 rounded-2xl px-10 py-4 text-base font-semibold text-white shadow-lg transition-all ${canProceedToDetails ? "bg-gradient-to-r from-[#7c3aed] to-[#ec4899] shadow-[#7c3aed]/30 hover:shadow-xl hover:shadow-[#7c3aed]/40 hover:scale-105" : "cursor-not-allowed bg-[#c9cdd4] shadow-none dark:bg-[#30363d]"}`}
-            >
-              下一步：商品详情
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-        )}
-
-        {/* ===== Step: Details ===== */}
-        {!showMyVideos && step === "details" && (
-          <div className="space-y-6">
-            {/* Uploaded Assets Summary */}
-            <div className="flex items-center gap-4 rounded-2xl border border-[#e5e6eb]/50 bg-white px-5 py-3 shadow-[0_2px_12px_0_rgba(0,0,0,0.04)] dark:border-[#30363d]/50 dark:bg-[#161b22]">
-              <div className="flex items-center gap-2 overflow-x-auto">
-                {video && (
-                  <div className="relative h-12 w-16 flex-shrink-0 overflow-hidden rounded-lg border border-[#e5e6eb] dark:border-[#30363d]">
-                    <video src={video.preview} className="h-full w-full object-cover" />
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/30"><svg className="h-4 w-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
-                  </div>
-                )}
-                {productImages.map(img => (
-                  <img key={img.id} src={img.preview} alt="" className="h-12 w-12 flex-shrink-0 rounded-lg border border-[#e5e6eb] object-cover dark:border-[#30363d]" />
-                ))}
-              </div>
-              <div className="ml-auto flex items-center gap-2 text-xs text-[#86909c]">
-                <span>{video ? "1个视频" : "无视频（图生视频）"}</span>
-                <span>·</span>
-                <span>{productImages.length}张图片</span>
-              </div>
-              <button onClick={() => setStep("upload")} className="flex-shrink-0 text-xs text-[#7c3aed] hover:underline">修改素材</button>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              {/* Left: Product Description */}
-              <div className="rounded-2xl border border-[#e5e6eb]/50 bg-white p-6 shadow-[0_2px_12px_0_rgba(0,0,0,0.04)] dark:border-[#30363d]/50 dark:bg-[#161b22]">
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="flex items-center gap-2 text-base font-semibold text-[#1d2129] dark:text-[#e6edf3]">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-[#7c3aed] to-[#a855f7] text-[10px] font-bold text-white">📝</span>
-                    商品详情简介
-                  </h3>
-                  <button
-                    onClick={handleGenerateDesc}
-                    disabled={isGeneratingDesc}
-                    className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[#7c3aed] to-[#a855f7] px-3 py-1.5 text-xs font-medium text-white transition-all hover:shadow-md disabled:opacity-60"
-                  >
-                    {isGeneratingDesc ? (
-                      <><svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> 生成中...</>
-                    ) : (
-                      <><svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg> AI一键生成</>
+            {/* Product Images */}
+            <div className="rounded-2xl border border-[#e5e6eb]/60 bg-white p-4 shadow-sm dark:border-[#30363d]/50 dark:bg-[#161b22]">
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#86909c]">
+                商品图片 <span className="font-normal normal-case">({productImages.length}/5)</span>
+              </h3>
+              <div className="grid grid-cols-3 gap-2">
+                {productImages.map((img) => (
+                  <div key={img.id} className="group relative aspect-square overflow-hidden rounded-lg border border-[#e5e6eb]/50 dark:border-[#30363d]/50">
+                    <img src={img.preview} alt="" className="h-full w-full object-cover" />
+                    {img.uploading && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                        <svg className="h-4 w-4 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                      </div>
                     )}
-                  </button>
-                </div>
-                <textarea
-                  value={productDesc}
-                  onChange={(e) => setProductDesc(e.target.value)}
-                  placeholder="AI将根据您上传的商品图片自动生成简介，您也可以手动编辑..."
-                  className="h-48 w-full resize-none rounded-xl border border-[#e5e6eb] bg-[#f7f8fa]/50 p-4 text-sm text-[#1d2129] placeholder-[#c9cdd4] outline-none transition-colors focus:border-[#7c3aed] focus:bg-white dark:border-[#30363d] dark:bg-[#0d1117]/50 dark:text-[#e6edf3] dark:focus:border-[#7c3aed]"
-                />
-                <p className="mt-2 text-xs text-[#86909c]">AI自动生成后，您可以自由编辑修改文案内容</p>
-              </div>
-
-              {/* Right: Config */}
-              <div className="space-y-6">
-                {/* Swap Type */}
-                <div className="rounded-2xl border border-[#e5e6eb]/50 bg-white p-6 shadow-[0_2px_12px_0_rgba(0,0,0,0.04)] dark:border-[#30363d]/50 dark:bg-[#161b22]">
-                  <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-[#1d2129] dark:text-[#e6edf3]">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-[#3370ff] to-[#7c3aed] text-[10px] font-bold text-white">🔄</span>
-                    替换类型
-                  </h3>
-                  <div className="grid grid-cols-3 gap-3">
-                    {swapTypes.map((t) => (
-                      <button
-                        key={t.id}
-                        onClick={() => setSwapType(t.id)}
-                        className={`flex flex-col items-center gap-2 rounded-xl border-2 p-3 transition-all ${swapType === t.id ? "border-[#7c3aed] bg-[#7c3aed]/5 dark:border-[#a855f7] dark:bg-[#7c3aed]/10" : "border-[#e5e6eb] hover:border-[#7c3aed]/30 dark:border-[#30363d] dark:hover:border-[#7c3aed]/30"}`}
-                      >
-                        <span className="text-xl">{t.icon}</span>
-                        <span className={`text-xs font-medium ${swapType === t.id ? "text-[#7c3aed] dark:text-[#a78bfa]" : "text-[#1d2129] dark:text-[#e6edf3]"}`}>{t.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* English Option */}
-                <div className="rounded-2xl border border-[#e5e6eb]/50 bg-white p-6 shadow-[0_2px_12px_0_rgba(0,0,0,0.04)] dark:border-[#30363d]/50 dark:bg-[#161b22]">
-                  <div className="flex items-center justify-between">
-                    <h3 className="flex items-center gap-2 text-base font-semibold text-[#1d2129] dark:text-[#e6edf3]">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-[#3370ff] to-[#06b6d4] text-[10px] font-bold text-white">🌐</span>
-                      英文版本
-                      <span className="text-xs font-normal text-[#86909c]">（含英文配音）</span>
-                    </h3>
-                    <button
-                      onClick={() => setNeedEnglish(!needEnglish)}
-                      className={`relative h-6 w-11 rounded-full transition-colors ${needEnglish ? "bg-[#7c3aed]" : "bg-[#c9cdd4] dark:bg-[#30363d]"}`}
-                    >
-                      <div className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${needEnglish ? "translate-x-5" : "translate-x-0.5"}`} />
+                    <button onClick={() => removeImage(img.id)} className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500">
+                      <svg className="h-2.5 w-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                   </div>
-                  {needEnglish && (
-                    <div className="mt-4 space-y-3">
-                      <button
-                        onClick={handleGenerateEnDesc}
-                        disabled={isGeneratingEnDesc || !productDesc}
-                        className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[#3370ff] to-[#06b6d4] px-3 py-1.5 text-xs font-medium text-white transition-all hover:shadow-md disabled:opacity-60"
-                      >
-                        {isGeneratingEnDesc ? (
-                          <><svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> 翻译中...</>
-                        ) : (
-                          <><svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/></svg> AI翻译生成</>
-                        )}
-                      </button>
-                      <textarea
-                        value={englishDesc}
-                        onChange={(e) => setEnglishDesc(e.target.value)}
-                        placeholder="点击上方按钮AI自动翻译，或手动输入英文文案..."
-                        className="h-28 w-full resize-none rounded-xl border border-[#e5e6eb] bg-[#f7f8fa]/50 p-3 text-sm text-[#1d2129] placeholder-[#c9cdd4] outline-none transition-colors focus:border-[#3370ff] focus:bg-white dark:border-[#30363d] dark:bg-[#0d1117]/50 dark:text-[#e6edf3]"
-                      />
-                    </div>
+                ))}
+                {productImages.length < 5 && (
+                  <div onClick={() => imageInputRef.current?.click()}
+                    className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-[#e5e6eb] bg-[#f7f8fa]/50 transition-all hover:border-[#ec4899]/50 hover:bg-[#ec4899]/5 dark:border-[#30363d] dark:bg-[#0d1117]/50">
+                    <svg className="h-5 w-5 text-[#c9cdd4] dark:text-[#484f58]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                    <span className="mt-0.5 text-[9px] text-[#86909c]">添加</span>
+                  </div>
+                )}
+              </div>
+              <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageUpload} />
+              {productImages.length === 0 && <p className="mt-2 text-[10px] text-[#c9cdd4]">上传商品图片后即可生成文案和视频</p>}
+            </div>
+          </div>
+
+          {/* ---- Right Column: Config + Generate + Result ---- */}
+          <div className="space-y-4 lg:col-span-8">
+            {/* Product Description */}
+            <div className="rounded-2xl border border-[#e5e6eb]/60 bg-white p-5 shadow-sm dark:border-[#30363d]/50 dark:bg-[#161b22]">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#86909c]">商品文案</h3>
+                <button onClick={handleGenerateDesc} disabled={isGeneratingDesc}
+                  className="flex items-center gap-1 rounded-lg bg-gradient-to-r from-[#7c3aed] to-[#a855f7] px-3 py-1.5 text-[11px] font-medium text-white transition-all hover:shadow-md disabled:opacity-50">
+                  {isGeneratingDesc ? (
+                    <><svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> AI生成中</>
+                  ) : (
+                    <><svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg> AI生成文案</>
                   )}
+                </button>
+              </div>
+              <textarea value={productDesc} onChange={(e) => setProductDesc(e.target.value)}
+                placeholder="上传商品图片后，点击「AI生成文案」自动生成，也可手动输入..."
+                className="h-32 w-full resize-none rounded-xl border border-[#e5e6eb] bg-[#f7f8fa]/50 p-3 text-sm text-[#1d2129] placeholder-[#c9cdd4] outline-none transition-colors focus:border-[#7c3aed] focus:bg-white dark:border-[#30363d] dark:bg-[#0d1117]/50 dark:text-[#e6edf3]" />
+
+              {/* English Toggle */}
+              <div className="mt-3 flex items-center gap-3 rounded-xl border border-[#e5e6eb]/50 bg-[#f7f8fa]/50 px-3 py-2.5 dark:border-[#30363d]/50 dark:bg-[#0d1117]/30">
+                <button onClick={() => setNeedEnglish(!needEnglish)}
+                  className={`relative h-5 w-9 flex-shrink-0 rounded-full transition-colors ${needEnglish ? "bg-[#7c3aed]" : "bg-[#c9cdd4] dark:bg-[#30363d]"}`}>
+                  <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${needEnglish ? "translate-x-4" : "translate-x-0.5"}`} />
+                </button>
+                <span className="text-xs text-[#4e5969] dark:text-[#8b949e]">同时生成英文版本（含配音）</span>
+                {needEnglish && (
+                  <button onClick={handleGenerateEnDesc} disabled={isGeneratingEnDesc || !productDesc}
+                    className="ml-auto flex items-center gap-1 rounded-md bg-[#3370ff] px-2.5 py-1 text-[10px] font-medium text-white hover:bg-[#2860e0] disabled:opacity-50 transition-colors">
+                    {isGeneratingEnDesc ? "翻译中..." : "AI翻译"}
+                  </button>
+                )}
+              </div>
+              {needEnglish && (
+                <textarea value={englishDesc} onChange={(e) => setEnglishDesc(e.target.value)}
+                  placeholder="点击「AI翻译」自动生成英文，也可手动输入..."
+                  className="mt-2 h-20 w-full resize-none rounded-xl border border-[#e5e6eb] bg-[#f7f8fa]/50 p-3 text-sm text-[#1d2129] placeholder-[#c9cdd4] outline-none transition-colors focus:border-[#3370ff] dark:border-[#30363d] dark:bg-[#0d1117]/50 dark:text-[#e6edf3]" />
+              )}
+            </div>
+
+            {/* Generate Button */}
+            <button onClick={handleGenerate} disabled={!canGenerate}
+              className={`w-full rounded-2xl py-3.5 text-sm font-semibold text-white shadow-lg transition-all ${canGenerate ? "bg-gradient-to-r from-[#7c3aed] to-[#ec4899] shadow-[#7c3aed]/25 hover:shadow-xl hover:shadow-[#7c3aed]/30 hover:scale-[1.01] active:scale-[0.99]" : "cursor-not-allowed bg-[#c9cdd4] shadow-none dark:bg-[#30363d]"}`}>
+              {generating ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                  AI生成中 {Math.round(progress)}%
+                </span>
+              ) : (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                  {video ? "开始AI替换生成" : "开始AI视频生成"}
+                </span>
+              )}
+            </button>
+
+            {/* Progress Bar (when generating) */}
+            {generating && (
+              <div className="rounded-2xl border border-[#7c3aed]/20 bg-gradient-to-r from-[#7c3aed]/5 to-[#ec4899]/5 p-5 dark:border-[#7c3aed]/30">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-xs font-medium text-[#7c3aed]">
+                    {progress < 30 ? "分析素材..." : progress < 60 ? "识别替换区域..." : progress < 90 ? "合成视频..." : "即将完成..."}
+                  </span>
+                  <span className="text-xs font-bold text-[#7c3aed]">{Math.min(Math.round(progress), 100)}%</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-[#e5e6eb] dark:bg-[#30363d]">
+                  <div className="h-full rounded-full bg-gradient-to-r from-[#7c3aed] to-[#ec4899] transition-all duration-500" style={{ width: `${Math.min(progress, 100)}%` }} />
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* Action Buttons */}
-            <div className="flex justify-center gap-4">
-              <button
-                onClick={() => setStep("upload")}
-                className="flex items-center gap-2 rounded-2xl border border-[#e5e6eb] bg-white px-8 py-3.5 text-sm font-medium text-[#86909c] transition-all hover:text-[#1d2129] dark:border-[#30363d] dark:bg-[#161b22]"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-                返回修改
-              </button>
-              <button
-                onClick={handleGenerate}
-                disabled={!canGenerate}
-                className={`flex items-center gap-3 rounded-2xl px-10 py-3.5 text-base font-semibold text-white shadow-lg transition-all ${canGenerate ? "bg-gradient-to-r from-[#7c3aed] to-[#ec4899] shadow-[#7c3aed]/30 hover:shadow-xl hover:scale-105" : "cursor-not-allowed bg-[#c9cdd4] shadow-none dark:bg-[#30363d]"}`}
-              >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                {video ? "开始AI替换生成" : "开始AI视频生成"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ===== Step: Generating ===== */}
-        {!showMyVideos && step === "generating" && (
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="relative mb-8">
-              <div className="h-32 w-32 rounded-full border-4 border-[#e5e6eb] dark:border-[#30363d]">
-                <svg className="h-full w-full -rotate-90" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="46" fill="none" stroke="url(#gradient)" strokeWidth="8" strokeLinecap="round" strokeDasharray={`${Math.min(progress, 100) * 2.89} 289`} />
-                  <defs>
-                    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#7c3aed" />
-                      <stop offset="100%" stopColor="#ec4899" />
-                    </linearGradient>
-                  </defs>
-                </svg>
-              </div>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-2xl font-bold text-[#7c3aed]">{Math.min(Math.round(progress), 100)}%</span>
-              </div>
-            </div>
-            <h3 className="mb-2 text-lg font-semibold text-[#1d2129] dark:text-[#e6edf3]">{video ? "AI正在替换生成视频..." : "AI正在生成推广视频..."}</h3>
-            <p className="text-sm text-[#86909c]">
-              {progress < 30 ? "正在分析素材内容..." : progress < 60 ? (video ? "正在识别并替换目标区域..." : "正在基于图片和文案生成视频...") : progress < 90 ? "正在合成高质量视频..." : "即将完成..."}
-            </p>
-          </div>
-        )}
-
-        {/* ===== Step: Preview ===== */}
-        {!showMyVideos && step === "preview" && (
-          <div className="space-y-6">
-            {/* Compare */}
-            <div className="rounded-2xl border border-[#e5e6eb]/50 bg-white p-6 shadow-[0_2px_12px_0_rgba(0,0,0,0.04)] dark:border-[#30363d]/50 dark:bg-[#161b22]">
-              <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-[#1d2129] dark:text-[#e6edf3]">
-                <svg className="h-5 w-5 text-[#00b578]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                替换效果对比
-              </h3>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {/* Original */}
-                <div>
-                  <p className="mb-2 text-center text-sm font-medium text-[#86909c]">{video ? "原始视频" : "商品素材"}</p>
-                  <div className="overflow-hidden rounded-xl border border-[#e5e6eb]/50 dark:border-[#30363d]/50" style={{ minHeight: 200 }}>
-                    {video ? (
-                      <video src={video.preview} controls className="w-full bg-black" style={{ maxHeight: 360 }} />
-                    ) : (
-                      <div className="grid grid-cols-2 gap-2 bg-[#f7f8fa] p-3 dark:bg-[#0d1117]">
-                        {productImages.map(img => (
-                          <img key={img.id} src={img.preview} alt="" className="w-full rounded-lg object-cover" style={{ maxHeight: 170 }} />
+            {/* Result Preview */}
+            {resultReady && (
+              <div ref={resultRef} className="rounded-2xl border border-[#00b578]/30 bg-white p-5 shadow-sm dark:border-[#00b578]/20 dark:bg-[#161b22]">
+                <div className="mb-4 flex items-center gap-2">
+                  <svg className="h-4 w-4 text-[#00b578]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  <h3 className="text-sm font-semibold text-[#1d2129] dark:text-[#e6edf3]">生成完成</h3>
+                </div>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {/* Original */}
+                  <div>
+                    <p className="mb-2 text-center text-[11px] font-medium text-[#86909c]">{video ? "原始视频" : "商品素材"}</p>
+                    <div className="overflow-hidden rounded-xl border border-[#e5e6eb]/50 dark:border-[#30363d]/50" style={{ minHeight: 160 }}>
+                      {video ? (
+                        <video src={video.preview} controls className="w-full bg-black" style={{ maxHeight: 280 }} />
+                      ) : (
+                        <div className="grid grid-cols-2 gap-1.5 bg-[#f7f8fa] p-2 dark:bg-[#0d1117]">
+                          {productImages.map(img => (
+                            <img key={img.id} src={img.preview} alt="" className="w-full rounded-lg object-cover" style={{ maxHeight: 130 }} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {/* Result */}
+                  <div>
+                    <p className="mb-2 text-center text-[11px] font-medium text-[#7c3aed]">AI生成结果</p>
+                    <div className="relative overflow-hidden rounded-xl border-2 border-[#7c3aed]/30" style={{ minHeight: 160 }}>
+                      {resultVideoUrl ? (
+                        <video src={resultVideoUrl} controls className="w-full bg-black" style={{ maxHeight: 280 }} />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-12 bg-gradient-to-br from-[#7c3aed]/5 to-[#ec4899]/5">
+                          <svg className="mb-2 h-10 w-10 text-[#7c3aed]/30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                          <p className="text-xs text-[#7c3aed]/60">Mock模式 · 接入真实模型后展示</p>
+                        </div>
+                      )}
+                      <span className="absolute left-1.5 top-1.5 rounded-md bg-gradient-to-r from-[#7c3aed] to-[#ec4899] px-2 py-0.5 text-[9px] font-semibold text-white">AI生成</span>
+                    </div>
+                  </div>
+                </div>
+                {/* Actions */}
+                <div className="mt-4 flex flex-wrap justify-center gap-3">
+                  <button className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#7c3aed] to-[#ec4899] px-6 py-2.5 text-xs font-semibold text-white shadow-md hover:shadow-lg transition-all">
+                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    下载视频
+                  </button>
+                  {/* 分享到短视频平台 */}
+                  <div className="relative">
+                    <button onClick={() => setShowShareMenu(!showShareMenu)}
+                      className="flex items-center gap-1.5 rounded-xl border border-[#e5e6eb] bg-white px-6 py-2.5 text-xs font-medium text-[#4e5969] hover:border-[#7c3aed]/30 hover:text-[#7c3aed] transition-all dark:border-[#30363d] dark:bg-[#21262d] dark:text-[#8b949e]">
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                      分享到平台
+                      <svg className={`h-3 w-3 transition-transform ${showShareMenu ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                    {showShareMenu && (
+                      <div className="absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 rounded-xl border border-[#e5e6eb] bg-white p-2 shadow-xl dark:border-[#30363d] dark:bg-[#161b22]" style={{ minWidth: 200 }}>
+                        {[
+                          { name: "抖音", icon: "🎵", color: "text-[#000] dark:text-white" },
+                          { name: "快手", icon: "📹", color: "text-[#ff4906]" },
+                          { name: "小红书", icon: "📕", color: "text-[#ff2442]" },
+                          { name: "视频号", icon: "💬", color: "text-[#07c160]" },
+                          { name: "B站", icon: "📺", color: "text-[#00a1d6]" },
+                        ].map((p) => (
+                          <button key={p.name} onClick={() => { setShowShareMenu(false); setApiError(`「${p.name}」发布功能即将上线，敬请期待`); }}
+                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-medium text-[#1d2129] transition-colors hover:bg-[#f7f8fa] dark:text-[#e6edf3] dark:hover:bg-[#21262d]">
+                            <span className="text-base">{p.icon}</span>
+                            <span>发布到{p.name}</span>
+                            <svg className="ml-auto h-3.5 w-3.5 text-[#c9cdd4]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                          </button>
                         ))}
                       </div>
                     )}
                   </div>
-                </div>
-                {/* Result */}
-                <div>
-                  <p className="mb-2 text-center text-sm font-medium text-[#7c3aed]">{video ? "替换后视频" : "AI生成视频"}</p>
-                  <div className="relative overflow-hidden rounded-xl border-2 border-[#7c3aed]/30 dark:border-[#7c3aed]/50" style={{ minHeight: 200 }}>
-                    {resultVideoUrl ? (
-                      <video src={resultVideoUrl} controls className="w-full bg-black" style={{ maxHeight: 360 }} />
-                    ) : (
-                      <div className="flex flex-col items-center justify-center bg-gradient-to-br from-[#7c3aed]/5 to-[#ec4899]/5 py-16">
-                        <svg className="mb-3 h-12 w-12 text-[#7c3aed]/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-                        <p className="text-sm font-medium text-[#7c3aed]/70">AI生成视频预览</p>
-                        <p className="mt-1 text-xs text-[#86909c]">（Mock模式 - 接入真实视频生成后展示）</p>
-                      </div>
-                    )}
-                    <div className="absolute left-2 top-2 flex items-center gap-1 rounded-lg bg-gradient-to-r from-[#7c3aed] to-[#ec4899] px-2.5 py-1 text-[10px] font-semibold text-white">
-                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                      </svg>
-                      AI生成
-                    </div>
-                  </div>
+                  <button onClick={handleReset}
+                    className="flex items-center gap-1.5 rounded-xl border border-[#e5e6eb] bg-white px-6 py-2.5 text-xs font-medium text-[#86909c] hover:text-[#1d2129] transition-all dark:border-[#30363d] dark:bg-[#21262d] dark:text-[#8b949e]">
+                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    重新生成
+                  </button>
                 </div>
               </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex flex-wrap justify-center gap-4">
-              <button className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#7c3aed] to-[#ec4899] px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-[#7c3aed]/20 transition-all hover:shadow-xl">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                下载视频
-              </button>
-              <button className="flex items-center gap-2 rounded-xl border border-[#e5e6eb] bg-white px-8 py-3 text-sm font-medium text-[#1d2129] transition-all hover:border-[#7c3aed]/30 dark:border-[#30363d] dark:bg-[#161b22] dark:text-[#e6edf3]">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                </svg>
-                一键发布
-              </button>
-              <button
-                onClick={handleReset}
-                className="flex items-center gap-2 rounded-xl border border-[#e5e6eb] bg-white px-8 py-3 text-sm font-medium text-[#86909c] transition-all hover:text-[#1d2129] dark:border-[#30363d] dark:bg-[#161b22] dark:text-[#8b949e]"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                重新生成
-              </button>
-            </div>
+            )}
           </div>
+        </div>
         )}
       </div>
     </div>
