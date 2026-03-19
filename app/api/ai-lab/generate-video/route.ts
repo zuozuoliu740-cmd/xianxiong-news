@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { videoTasks, VideoTask } from "@/lib/video-tasks";
-import { submitVideoTask } from "@/lib/aliyun/dashscope";
+import { submitVideoTask, submitCharacterSwapTask } from "@/lib/aliyun/dashscope";
 import fs from "fs";
 import path from "path";
 
@@ -30,32 +30,45 @@ function localImageToBase64(imageUrl: string): string | null {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { videoUrl, imageUrls, desc, swapType, needEnglish, englishDesc } = body;
+    const { videoUrl, imageUrls, desc, swapType, needEnglish, englishDesc, videoPrompt } = body;
 
     if (!imageUrls || !Array.isArray(imageUrls) || imageUrls.length === 0) {
       return NextResponse.json({ error: "至少需要一张商品图片" }, { status: 400 });
     }
-    if (!desc || typeof desc !== "string") {
-      return NextResponse.json({ error: "缺少商品文案" }, { status: 400 });
-    }
 
-    // 取第一张图片作为首帧图，转 Base64
     const firstImage = imageUrls[0];
-    let imgForApi: string;
+    let dsResult;
 
-    if (firstImage.startsWith("http://") || firstImage.startsWith("https://")) {
-      imgForApi = firstImage; // 已是公网URL
+    if (swapType === "model" && videoUrl) {
+      // 模特替换: 使用 wan2.2-animate-mix 视频换人模型
+      // 需要公网可访问的 HTTP URL
+      const host = req.headers.get('host') || 'localhost:3000';
+      const protocol = req.headers.get('x-forwarded-proto') || 'http';
+      const baseUrl = `${protocol}://${host}`;
+
+      const publicImageUrl = firstImage.startsWith('http') ? firstImage : `${baseUrl}${firstImage}`;
+      const publicVideoUrl = videoUrl.startsWith('http') ? videoUrl : `${baseUrl}${videoUrl}`;
+
+      console.log(`[generate-video] 模特替换 -> wan2.2-animate-mix`);
+      console.log(`  image: ${publicImageUrl}`);
+      console.log(`  video: ${publicVideoUrl}`);
+
+      dsResult = await submitCharacterSwapTask(publicImageUrl, publicVideoUrl);
     } else {
-      const base64 = localImageToBase64(firstImage);
-      if (!base64) {
-        return NextResponse.json({ error: "图片读取失败，请重新上传" }, { status: 400 });
+      // 商品替换/服饰替换: 使用 wanx2.1-i2v-turbo 图生视频
+      let imgForApi: string;
+      if (firstImage.startsWith("http://") || firstImage.startsWith("https://")) {
+        imgForApi = firstImage;
+      } else {
+        const base64 = localImageToBase64(firstImage);
+        if (!base64) {
+          return NextResponse.json({ error: "图片读取失败，请重新上传" }, { status: 400 });
+        }
+        imgForApi = base64;
       }
-      imgForApi = base64;
+      const prompt = videoPrompt || desc || "生成一个产品展示视频";
+      dsResult = await submitVideoTask(imgForApi, prompt);
     }
-
-    // 提交到DashScope万相图生视频
-    const prompt = needEnglish && englishDesc ? `${desc}\n${englishDesc}` : desc;
-    const dsResult = await submitVideoTask(imgForApi, prompt);
 
     const taskId = uuidv4();
     const task: VideoTask = {

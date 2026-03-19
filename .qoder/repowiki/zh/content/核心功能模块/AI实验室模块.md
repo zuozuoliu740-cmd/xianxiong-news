@@ -31,6 +31,8 @@
 
 ## 更新摘要
 **所做更改**
+- DashScope通义千问视频生成服务完全集成，替代了原有的模拟视频生成系统
+- 新增真实的异步任务管理、图像处理增强和实时状态监控功能
 - 产品交换功能从传统多步骤向导重构为现代化步骤指示器系统
 - 新增分享功能集成，支持抖音、快手、小红书等短视频平台
 - 简化状态管理和UI设计，提升用户体验
@@ -58,6 +60,8 @@
 AI实验室模块是一个集成了多种AI功能的综合性平台，现已完成从纯前端模拟到生产级API集成的重大升级。该模块的核心特色包括AI爆品替换、DashScope通义千问集成、文件上传系统、视频生成管道、历史记录管理等创新功能，旨在帮助用户快速制作高质量的电商推广内容。
 
 本次重大升级引入了完整的后端API系统，包括AI文案生成、翻译服务、文件存储、视频处理等核心功能，从前端纯模拟迁移到真实的生产级服务集成。产品交换功能经过重构，从传统的多步骤向导转变为现代化的步骤指示器系统，并新增了分享功能集成。
+
+**更新** DashScope通义千问视频生成服务已完全集成，替代了原有的模拟视频生成系统，提供真实的异步任务管理和实时状态监控功能。
 
 ## 项目结构
 
@@ -315,6 +319,8 @@ class DashScopeClient {
 +chatCompletion(messages, options) Promise~string~
 +generateProductDesc(params) Promise~string~
 +translateToEnglish(text) Promise~string~
++submitVideoTask(imgUrl, prompt) Promise~SubmitVideoResult~
++queryVideoTask(taskId) Promise~QueryVideoResult~
 }
 class ChatMessage {
 +role : "system"|"user"|"assistant"
@@ -328,6 +334,8 @@ class VideoTask {
 +params : Object
 +resultUrl : string
 +error : string
++dashscopeTaskId : string
++pollCount : number
 }
 DashScopeClient --> ChatMessage
 DashScopeClient --> VideoTask
@@ -347,6 +355,8 @@ DashScopeClient --> VideoTask
 | 营销话术优化 | 专业电商文案专家角色 | 生成内容符合营销规范 |
 | 多语言支持 | 中文到英文自动翻译 | 保持营销风格一致 |
 | 模板化输出 | 结构化列表格式 | 提高可读性和吸引力 |
+
+**更新** DashScope集成现已支持完整的视频生成服务，包括任务提交、状态查询和结果获取。
 
 **章节来源**
 - [lib/aliyun/dashscope.ts:35-70](file://lib/aliyun/dashscope.ts#L35-L70)
@@ -455,6 +465,8 @@ A-->>C : 返回视频URL
 - [app/ai-lab/product-swap/page.tsx:78-116](file://app/ai-lab/product-swap/page.tsx#L78-L116)
 - [app/api/ai-lab/generate-video/route.ts:8-29](file://app/api/ai-lab/generate-video/route.ts#L8-L29)
 - [app/api/ai-lab/generate-video/status/route.ts:6-26](file://app/api/ai-lab/generate-video/status/route.ts#L6-L26)
+
+**更新** DashScope通义千问视频生成服务已完全集成，提供真实的异步任务管理和实时状态监控。
 
 **章节来源**
 - [app/api/ai-lab/generate-video/route.ts:1-68](file://app/api/ai-lab/generate-video/route.ts#L1-L68)
@@ -682,6 +694,8 @@ N --> O
 
 UI组件都支持响应式布局，适配不同设备的显示需求。
 
+**更新** DashScope集成提供了高效的异步任务处理能力，支持实时状态监控和进度跟踪。
+
 ## 故障排除指南
 
 ### 常见问题及解决方案
@@ -695,6 +709,7 @@ UI组件都支持响应式布局，适配不同设备的显示需求。
 | 进度查询失败 | 404任务不存在 | 检查任务ID是否正确传递 |
 | 步骤指示器异常 | 步骤状态显示错误 | 刷新页面或检查状态管理逻辑 |
 | 分享功能失效 | 平台链接无法点击 | 检查分享菜单状态和事件绑定 |
+| DashScope任务失败 | 视频生成失败 | 检查DashScope API状态和配额限制 |
 
 ### 调试方法
 
@@ -702,6 +717,7 @@ UI组件都支持响应式布局，适配不同设备的显示需求。
 2. **网络面板监控**：观察API请求和响应状态
 3. **文件系统检查**：验证上传文件和历史记录存储
 4. **环境变量验证**：确认所有必需的环境变量已正确设置
+5. **DashScope状态监控**：检查任务ID和状态查询结果
 
 **章节来源**
 - [lib/aliyun/dashscope.ts:3-6](file://lib/aliyun/dashscope.ts#L3-L6)
@@ -720,6 +736,8 @@ AI实验室模块已完成从纯前端模拟到生产级API集成的重大升级
 4. **用户体验**：现代化的步骤指示器系统和分享功能，提供直观易用的操作体验
 5. **可扩展性**：模块化设计便于后续功能扩展和技术升级
 
+**更新** DashScope通义千问视频生成服务已完全集成，提供真实的异步任务管理和实时状态监控功能，替代了原有的模拟视频生成系统。
+
 ### 技术亮点
 
 1. **智能文案生成**：基于通义千问的专业电商文案生成
@@ -729,6 +747,7 @@ AI实验室模块已完成从纯前端模拟到生产级API集成的重大升级
 5. **现代化步骤指示器**：从传统向导重构为直观的步骤导航
 6. **平台分享集成**：支持多平台一键分享功能
 7. **响应式设计**：适配多种设备和屏幕尺寸的界面
+8. **真实异步任务管理**：基于DashScope的视频生成服务，提供真实的异步处理能力
 
 ### 发展方向
 
@@ -740,3 +759,5 @@ AI实验室模块已完成从纯前端模拟到生产级API集成的重大升级
 6. **分享功能完善**：实现真正的平台发布功能
 
 该模块现已具备成为电商内容创作领域领先解决方案的完整基础，为用户提供了一站式的AI内容生成和管理服务。通过现代化的步骤指示器系统和分享功能集成，显著提升了用户体验和操作效率。
+
+**更新** DashScope通义千问视频生成服务的完全集成标志着AI实验室模块从概念验证阶段正式进入生产级应用阶段，为用户提供了真正可靠的AI内容创作工具。

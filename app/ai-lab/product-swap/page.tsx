@@ -3,7 +3,22 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
 
+/** 生成唯一ID（兼容非HTTPS环境） */
+function genId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    try { return crypto.randomUUID(); } catch {}
+  }
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+
 type SwapType = "product" | "clothing" | "model";
+
+/** 每种替换类型对应的默认提示词 */
+const DEFAULT_PROMPTS: Record<SwapType, string> = {
+  product: "把上传图片中的产品，替换掉视频中的产品，保持视频的整体风格和运动轨迹不变，让替换后的画面自然流畅",
+  clothing: "把上传图片中的服饰，替换掉视频中模特身上的服装，保持模特的动作姿态不变，让服饰在视频中自然展示",
+  model: "把上传图片中的人物/模特，替换掉视频中的人物，保持原始视频的动作和场景不变，让替换后的人物动作自然协调",
+};
 
 interface UploadedFile {
   file: File;
@@ -57,6 +72,7 @@ export default function ProductSwapPage() {
   const [uploadedVideoUrl, setUploadedVideoUrl] = useState<string | null>(null);
   const [uploadedImageUrls, setUploadedImageUrls] = useState<string[]>([]);
   const [showShareMenu, setShowShareMenu] = useState(false);
+  const [videoPrompt, setVideoPrompt] = useState(DEFAULT_PROMPTS["product"]);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -125,7 +141,7 @@ export default function ProductSwapPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     const preview = URL.createObjectURL(file);
-    const id = crypto.randomUUID();
+    const id = genId();
     setVideo({ file, preview, id, uploading: true });
     setUploadingVideo(true);
     setApiError(null);
@@ -150,7 +166,7 @@ export default function ProductSwapPage() {
   const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     const newImages = files.slice(0, 5 - productImages.length).map((file) => ({
-      file, preview: URL.createObjectURL(file), id: crypto.randomUUID(), uploading: true,
+      file, preview: URL.createObjectURL(file), id: genId(), uploading: true,
     }));
     setProductImages((prev) => [...prev, ...newImages].slice(0, 5));
     if (imageInputRef.current) imageInputRef.current.value = "";
@@ -195,7 +211,7 @@ export default function ProductSwapPage() {
       const res = await fetch("/api/ai-lab/generate-desc", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ swapType, imageCount: productImages.length, hasVideo: !!video }),
+        body: JSON.stringify({ swapType, imageCount: productImages.length, hasVideo: !!video, videoUrl: resultVideoUrl || undefined }),
       });
       const data = await res.json();
       if (data.success) setProductDesc(data.desc);
@@ -224,7 +240,7 @@ export default function ProductSwapPage() {
     setIsGeneratingEnDesc(false);
   };
 
-  const canGenerate = productImages.length > 0 && productDesc.trim().length > 0 && !generating;
+  const canGenerate = productImages.length > 0 && !generating;
 
   const handleGenerate = async () => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -240,6 +256,7 @@ export default function ProductSwapPage() {
         body: JSON.stringify({
           videoUrl: uploadedVideoUrl, imageUrls: uploadedImageUrls,
           desc: productDesc, swapType, needEnglish, englishDesc,
+          videoPrompt,
         }),
       });
       const data = await res.json();
@@ -271,6 +288,7 @@ export default function ProductSwapPage() {
     setResultVideoUrl(null);
     setUploadedVideoUrl(null);
     setUploadedImageUrls([]);
+    setVideoPrompt(DEFAULT_PROMPTS["product"]);
     setApiError(null);
   };
 
@@ -293,7 +311,7 @@ export default function ProductSwapPage() {
           </div>
           <div className="ml-auto flex items-center gap-2">
             <button
-              onClick={() => setShowHistory(!showHistory)}
+              onClick={() => { const next = !showHistory; setShowHistory(next); if (next) fetchHistory(); }}
               className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${showHistory ? "bg-[#7c3aed] text-white shadow-md shadow-[#7c3aed]/20" : "bg-[#f7f8fa] text-[#86909c] hover:bg-[#7c3aed]/10 hover:text-[#7c3aed] dark:bg-[#21262d] dark:text-[#8b949e]"}`}
             >
               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
@@ -308,14 +326,13 @@ export default function ProductSwapPage() {
         <div className="border-b border-[#e5e6eb]/40 bg-white/60 backdrop-blur-sm dark:border-[#30363d]/30 dark:bg-[#161b22]/60">
           <div className="mx-auto flex max-w-[1200px] items-center justify-center gap-0 px-5 py-3">
             {[
-              { num: 1, label: "上传视频", done: !!video },
-              { num: 2, label: "上传商品图", done: productImages.length > 0 },
-              { num: 3, label: "商品文案", done: productDesc.trim().length > 0 },
-              { num: 4, label: "AI生成", done: resultReady },
-              { num: 5, label: "分享发布", done: false },
+              { num: 1, label: "上传素材", done: productImages.length > 0 },
+              { num: 2, label: "提示词", done: true },
+              { num: 3, label: "AI生成", done: resultReady },
+              { num: 4, label: "文案发布", done: false },
             ].map((s, i, arr) => {
               const isActive = !s.done && (i === 0 || arr[i - 1].done);
-              const isCurrent = generating && s.num === 4;
+              const isCurrent = generating && s.num === 3;
               return (
                 <div key={s.num} className="flex items-center">
                   <div className="flex flex-col items-center gap-1">
@@ -456,7 +473,7 @@ export default function ProductSwapPage() {
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#86909c]">替换类型</h3>
               <div className="flex gap-2">
                 {swapTypes.map((t) => (
-                  <button key={t.id} onClick={() => setSwapType(t.id)}
+                  <button key={t.id} onClick={() => { setSwapType(t.id); setVideoPrompt(DEFAULT_PROMPTS[t.id]); }}
                     className={`flex flex-1 flex-col items-center gap-1 rounded-xl border-2 py-2.5 text-xs font-medium transition-all ${swapType === t.id ? "border-[#7c3aed] bg-[#7c3aed]/5 text-[#7c3aed] dark:border-[#a855f7] dark:text-[#a78bfa]" : "border-[#e5e6eb] text-[#4e5969] hover:border-[#7c3aed]/30 dark:border-[#30363d] dark:text-[#8b949e]"}`}
                   >
                     <span className="text-base">{t.icon}</span>
@@ -528,6 +545,27 @@ export default function ProductSwapPage() {
 
           {/* ---- Right Column: Config + Generate + Result ---- */}
           <div className="space-y-4 lg:col-span-8">
+            {/* Video Prompt - 视频生成提示词 */}
+            <div className="rounded-2xl border border-[#e5e6eb]/60 bg-white p-5 shadow-sm dark:border-[#30363d]/50 dark:bg-[#161b22]">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[#86909c]">
+                  <svg className="h-3.5 w-3.5 text-[#7c3aed]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                  视频生成提示词
+                </h3>
+                <span className="text-[10px] text-[#86909c] dark:text-[#484f58]">告诉AI模型要生成什么样的视频</span>
+              </div>
+              <textarea value={videoPrompt} onChange={(e) => setVideoPrompt(e.target.value)}
+                placeholder="描述你想要AI生成的视频效果..."
+                className="h-24 w-full resize-none rounded-xl border border-[#e5e6eb] bg-[#f7f8fa]/50 p-3 text-sm text-[#1d2129] placeholder-[#c9cdd4] outline-none transition-colors focus:border-[#7c3aed] focus:bg-white dark:border-[#30363d] dark:bg-[#0d1117]/50 dark:text-[#e6edf3] dark:focus:bg-[#161b22]" />
+              <div className="mt-2 flex items-center gap-2">
+                <button onClick={() => setVideoPrompt(DEFAULT_PROMPTS[swapType])}
+                  className="rounded-md border border-[#e5e6eb] bg-[#f7f8fa] px-2 py-1 text-[10px] text-[#86909c] transition-colors hover:border-[#7c3aed]/30 hover:text-[#7c3aed] dark:border-[#30363d] dark:bg-[#21262d] dark:text-[#8b949e]">
+                  恢复默认提示词
+                </button>
+                <span className="text-[10px] text-[#c9cdd4] dark:text-[#484f58]">切换替换类型会自动更新提示词</span>
+              </div>
+            </div>
+
             {/* Product Description */}
             <div className="rounded-2xl border border-[#e5e6eb]/60 bg-white p-5 shadow-sm dark:border-[#30363d]/50 dark:bg-[#161b22]">
               <div className="mb-3 flex items-center justify-between">
@@ -543,7 +581,7 @@ export default function ProductSwapPage() {
               </div>
               <textarea value={productDesc} onChange={(e) => setProductDesc(e.target.value)}
                 placeholder="上传商品图片后，点击「AI生成文案」自动生成，也可手动输入..."
-                className="h-32 w-full resize-none rounded-xl border border-[#e5e6eb] bg-[#f7f8fa]/50 p-3 text-sm text-[#1d2129] placeholder-[#c9cdd4] outline-none transition-colors focus:border-[#7c3aed] focus:bg-white dark:border-[#30363d] dark:bg-[#0d1117]/50 dark:text-[#e6edf3]" />
+                className="h-32 w-full resize-none rounded-xl border border-[#e5e6eb] bg-[#f7f8fa]/50 p-3 text-sm text-[#1d2129] placeholder-[#c9cdd4] outline-none transition-colors focus:border-[#7c3aed] focus:bg-white dark:border-[#30363d] dark:bg-[#0d1117]/50 dark:text-[#e6edf3] dark:focus:bg-[#161b22]" />
 
               {/* English Toggle */}
               <div className="mt-3 flex items-center gap-3 rounded-xl border border-[#e5e6eb]/50 bg-[#f7f8fa]/50 px-3 py-2.5 dark:border-[#30363d]/50 dark:bg-[#0d1117]/30">

@@ -6,13 +6,13 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { swapType = "product", imageCount = 1, hasVideo = false } = body;
+    const { swapType = "product", imageCount = 1, hasVideo = false, videoUrl } = body;
 
     if (!["product", "clothing", "model"].includes(swapType)) {
       return NextResponse.json({ error: "无效的替换类型" }, { status: 400 });
     }
 
-    const desc = await generateProductDesc({ swapType, imageCount, hasVideo });
+    const desc = await generateProductDesc({ swapType, imageCount, hasVideo, videoUrl });
 
     return NextResponse.json({ success: true, desc });
   } catch (error: any) {

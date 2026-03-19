@@ -9,7 +9,9 @@ module.exports = {
     env: {
       NODE_ENV: 'production',
       PORT: 3000,
-      JUHE_API_KEY: '73de630ba83f999df435c7ccfb44daf1'
+      HOSTNAME: '0.0.0.0',
+      JUHE_API_KEY: '73de630ba83f999df435c7ccfb44daf1',
+      DASHSCOPE_API_KEY: 'sk-d87066276bc840afa203cb66ccc7970b'
     }
   }]
 };
