@@ -15,6 +15,13 @@
 - [app/ai-lab/page.tsx](file://app/ai-lab/page.tsx)
 </cite>
 
+## 更新摘要
+**变更内容**
+- 新增视频换人模型(wan2.2-animate-mix)支持，实现视频中角色替换功能
+- 新增视觉分析功能(qwen-vl-max)，基于视频内容生成精准推广文案
+- 增强AI内容分析能力，支持多模态内容理解和生成
+- 扩展视频生成选项，提供商品替换、服饰替换和模特替换三种模式
+
 ## 目录
 1. [项目概述](#项目概述)
 2. [Dashscope 集成架构](#dashscope-集成架构)
@@ -29,12 +36,14 @@
 
 ## 项目概述
 
-这是一个基于 Next.js 构建的新闻网站，集成了阿里云 Dashscope AI 服务。项目提供了 AI 驱动的电商内容生成能力，包括商品文案生成、图像生成和视频生成功能。
+这是一个基于 Next.js 构建的新闻网站，集成了阿里云 Dashscope AI 服务。项目提供了 AI 驱动的电商内容生成能力，包括商品文案生成、图像生成和视频生成功能。**最新更新**增加了视频换人技术和视觉分析能力，显著增强了AI内容分析和生成能力。
 
 ### 主要特性
 
 - **AI 文案生成**：基于 Dashscope 的通义千问模型生成吸引人的商品推广文案
 - **多模态内容生成**：支持文本到图像、图像到视频的生成
+- **视频换人技术**：使用 wan2.2-animate-mix 模型实现视频中角色替换
+- **视觉分析功能**：基于 qwen-vl-max 模型分析视频内容生成精准文案
 - **实时进度监控**：提供异步任务的状态查询和进度跟踪
 - **历史记录管理**：持久化保存用户的生成历史和结果
 - **多语言支持**：支持中英文双语内容生成
@@ -58,11 +67,15 @@ DESC[文案生成服务]
 VIDEO[视频生成服务]
 UPLOAD[文件上传服务]
 HISTORY[历史记录服务]
-end
+ANALYZE[视觉分析服务]
+END
 subgraph "AI 服务层"
 DASHSCOPE[Dashscope API]
 QWEN[通义千问模型]
+QWEN_VL[通义视觉模型 qwen-vl-max]
 WANXIANG[通义万相模型]
+WAN22[wan2.2-animate-mix]
+WANX1[wanx2.1-i2v-turbo]
 end
 subgraph "数据存储层"
 MEMORY[内存存储]
@@ -72,12 +85,17 @@ end
 UI --> API
 API --> DESC
 API --> VIDEO
+API --> ANALYZE
 API --> UPLOAD
 API --> HISTORY
 DESC --> DASHSCOPE
 VIDEO --> DASHSCOPE
+ANALYZE --> DASHSCOPE
 DASHSCOPE --> QWEN
+DASHSCOPE --> QWEN_VL
 DASHSCOPE --> WANXIANG
+DASHSCOPE --> WAN22
+DASHSCOPE --> WANX1
 VIDEO --> MEMORY
 HISTORY --> JSON
 UPLOAD --> DISK
@@ -94,7 +112,9 @@ UPLOAD --> DISK
 |------|----------|------|
 | 前端框架 | Next.js | 16.1.6 |
 | AI 模型 | Dashscope | 通义千问/Qwen |
-| 视频生成 | 通义万相 | wan2.1-i2v-turbo |
+| 视觉分析 | 通义视觉模型 | qwen-vl-max |
+| 视频生成 | 通义万相模型 | wanx2.1-i2v-turbo |
+| 视频换人 | 通义万相模型 | wan2.2-animate-mix |
 | 数据存储 | 内存 Map + 文件系统 | - |
 | 开发语言 | TypeScript | - |
 
@@ -105,7 +125,7 @@ UPLOAD --> DISK
 
 ### Dashscope 客户端封装
 
-Dashscope 的核心功能通过一个统一的客户端进行封装，提供了多种 AI 服务能力：
+Dashscope 的核心功能通过一个统一的客户端进行封装，现在支持多种 AI 服务能力，包括新增的视频换人和视觉分析功能：
 
 ```mermaid
 classDiagram
@@ -116,6 +136,7 @@ class DashscopeClient {
 +generateProductDesc(params) Promise~string~
 +translateToEnglish(text) Promise~string~
 +submitVideoTask(imgUrl, prompt, options) Promise~SubmitVideoResult~
++submitCharacterSwapTask(imageUrl, videoUrl, options) Promise~SubmitVideoResult~
 +queryVideoTask(taskId) Promise~QueryVideoResult~
 }
 class ChatMessage {
@@ -141,8 +162,12 @@ class VideoParams {
 +needEnglish : boolean
 +englishDesc? : string
 }
+class CharacterSwapOptions {
++mode : "wan-std" | "wan-fast" | "wan-hd"
+}
 DashscopeClient --> ChatMessage : "使用"
 DashscopeClient --> VideoTask : "管理"
+DashscopeClient --> CharacterSwapOptions : "配置"
 VideoTask --> VideoParams : "包含"
 ```
 
@@ -152,21 +177,25 @@ VideoTask --> VideoParams : "包含"
 
 ### 文案生成组件
 
-文案生成功能基于 Dashscope 的通义千问模型，支持不同类型的电商内容生成：
+文案生成功能基于 Dashscope 的通义千问模型，现在支持基于视频内容的智能分析：
 
 | 生成类型 | 模型参数 | 输出格式 | 适用场景 |
 |----------|----------|----------|----------|
 | 商品推广 | qwen-max | 150-250字 | 电商平台推广 |
 | 服饰搭配 | qwen-plus | 结构化列表 | 时尚内容推广 |
 | 模特展示 | qwen-turbo | 促销文案 | 形象展示推广 |
+| 视频分析 | qwen-vl-max | 视频内容理解 | AI生成视频分析 |
 | 英文翻译 | qwen-translate | 双语文案 | 国际市场推广 |
+
+**更新** 新增 qwen-vl-max 模型用于视频内容分析，能够精准识别视频中的产品特征、场景和人物特征
 
 **章节来源**
 - [lib/aliyun/dashscope.ts:35-70](file://lib/aliyun/dashscope.ts#L35-L70)
+- [lib/aliyun/dashscope.ts:78-123](file://lib/aliyun/dashscope.ts#L78-L123)
 
 ### 视频生成组件
 
-视频生成功能利用 Dashscope 的通义万相模型，支持从图像生成视频：
+视频生成功能现在支持两种不同的模型，满足不同的生成需求：
 
 ```mermaid
 sequenceDiagram
@@ -176,7 +205,11 @@ participant DS as "Dashscope"
 participant Task as "任务管理"
 Client->>API : POST /generate-video
 API->>API : 验证输入参数
-API->>DS : 提交视频生成任务
+alt 模特替换模式
+API->>DS : submitCharacterSwapTask (wan2.2-animate-mix)
+else 商品/服饰替换模式
+API->>DS : submitVideoTask (wanx2.1-i2v-turbo)
+end
 DS-->>API : 返回任务ID
 API->>Task : 创建任务记录
 API-->>Client : 返回任务ID
@@ -189,12 +222,15 @@ API-->>Client : 返回进度信息
 end
 ```
 
+**更新** 新增视频换人功能，支持将视频中的角色替换为指定图片中的人物，同时保留原始视频的场景、动作和表情
+
 **图表来源**
 - [app/api/ai-lab/generate-video/route.ts:30-88](file://app/api/ai-lab/generate-video/route.ts#L30-L88)
 - [app/api/ai-lab/generate-video/status/route.ts:16-87](file://app/api/ai-lab/generate-video/status/route.ts#L16-L87)
 
 **章节来源**
 - [lib/aliyun/dashscope.ts:117-191](file://lib/aliyun/dashscope.ts#L117-L191)
+- [lib/aliyun/dashscope.ts:215-262](file://lib/aliyun/dashscope.ts#L215-L262)
 
 ## API 接口设计
 
@@ -205,7 +241,7 @@ end
 | 生成文案 | POST | `/api/ai-lab/generate-desc` | 基于商品图片生成推广文案 |
 | 翻译文案 | POST | `/api/ai-lab/translate` | 将中文文案翻译为英文 |
 | 上传文件 | POST | `/api/ai-lab/upload` | 上传图片或视频文件 |
-| 生成视频 | POST | `/api/ai-lab/generate-video` | 提交视频生成任务 |
+| 生成视频 | POST | `/api/ai-lab/generate-video` | 提交视频生成任务（支持多种模式） |
 | 查询状态 | GET | `/api/ai-lab/generate-video/status` | 查询视频生成进度 |
 | 历史记录 | GET/POST | `/api/ai-lab/history` | 获取和保存生成历史 |
 
@@ -226,11 +262,13 @@ end
   "videoUrl": "https://example.com/video.mp4",
   "imageUrls": ["https://example.com/img1.jpg"],
   "desc": "商品推广文案",
-  "swapType": "product",
+  "swapType": "model",
   "needEnglish": true,
   "englishDesc": "English description"
 }
 ```
+
+**更新** 新增视频换人模式的请求参数，支持将视频中的角色替换为指定图片中的人物
 
 **章节来源**
 - [app/api/ai-lab/generate-desc/route.ts:6-25](file://app/api/ai-lab/generate-desc/route.ts#L6-L25)
@@ -245,13 +283,18 @@ flowchart TD
 Start([开始生成视频]) --> Validate[验证输入参数]
 Validate --> ValidInput{参数有效?}
 ValidInput --> |否| Error[返回错误信息]
-ValidInput --> |是| ConvertImage[转换图片格式]
+ValidInput --> |是| CheckMode{检查生成模式}
+CheckMode --> |商品/服饰| ConvertImage[转换图片格式]
+CheckMode --> |模特替换| ValidateUrls[验证URL格式]
 ConvertImage --> ImageType{图片类型?}
 ImageType --> |URL| UseURL[使用公网URL]
 ImageType --> |本地文件| ConvertBase64[转换为Base64]
 UseURL --> SubmitTask[提交Dashscope任务]
 ConvertBase64 --> SubmitTask
-SubmitTask --> CreateTask[创建任务记录]
+ValidateUrls --> PublicUrls[转换为公网URL]
+PublicUrls --> SubmitSwapTask[提交视频换人任务]
+SubmitSwapTask --> CreateTask[创建任务记录]
+SubmitTask --> CreateTask
 CreateTask --> PollStatus[轮询任务状态]
 PollStatus --> StatusCheck{任务完成?}
 StatusCheck --> |否| UpdateProgress[更新进度]
@@ -261,6 +304,8 @@ SaveResult --> Complete[生成完成]
 Error --> End([结束])
 Complete --> End
 ```
+
+**更新** 新增视频换人模式的数据流，支持将视频中的角色替换为指定图片中的人物
 
 **图表来源**
 - [app/api/ai-lab/generate-video/route.ts:30-88](file://app/api/ai-lab/generate-video/route.ts#L30-L88)
@@ -289,22 +334,31 @@ A[配置错误] --> A1[DASHSCOPE_API_KEY缺失]
 B[网络错误] --> B1[API调用失败]
 C[业务错误] --> C1[参数验证失败]
 C --> C2[文件上传失败]
+C --> C3[视频URL无效]
 D[系统错误] --> D1[内存溢出]
 D --> D2[磁盘空间不足]
+E[模型错误] --> E1[视频换人失败]
+E --> E2[视觉分析失败]
 end
 subgraph "处理策略"
-E[重试机制] --> E1[指数退避]
-F[降级处理] --> F1[本地缓存]
-G[用户提示] --> G1[友好错误信息]
-H[日志记录] --> H1[详细错误日志]
+F[重试机制] --> F1[指数退避]
+G[降级处理] --> G1[本地缓存]
+H[用户提示] --> H1[友好错误信息]
+I[日志记录] --> I1[详细错误日志]
+J[回滚机制] --> J1[撤销部分操作]
 end
-A1 --> H
-B1 --> E
-C1 --> G
-C2 --> G
-D1 --> F
-D2 --> F
+A1 --> I
+B1 --> F
+C1 --> H
+C2 --> H
+C3 --> H
+D1 --> G
+D2 --> G
+E1 --> F
+E2 --> G
 ```
+
+**更新** 新增视频换人和视觉分析相关的错误处理机制
 
 ### 错误恢复策略
 
@@ -314,6 +368,8 @@ D2 --> F
 | 任务查询失败 | 继续轮询 | 进度显示异常 |
 | 文件上传失败 | 重新上传 | 需要手动操作 |
 | 内存不足 | 清理缓存 | 重启应用 |
+| 视频换人失败 | 降级为普通视频生成 | 保持基本功能 |
+| 视觉分析失败 | 使用基础文案模板 | 保证功能可用 |
 
 **章节来源**
 - [app/api/ai-lab/generate-desc/route.ts:18-24](file://app/api/ai-lab/generate-desc/route.ts#L18-L24)
@@ -329,6 +385,9 @@ D2 --> F
 | 文件缓存 | 生成结果 | 按需清理 | 7天 |
 | 图片缓存 | 用户头像 | 永久缓存 | 30天 |
 | 配置缓存 | 模型参数 | 应用启动 | 进程生命周期 |
+| 视频分析缓存 | 视觉分析结果 | 临时缓存 | 5分钟 |
+
+**更新** 新增视频分析结果的缓存策略
 
 ### 并发控制
 
@@ -339,14 +398,19 @@ A[全局并发] --> A1[最大10个]
 B[任务队列] --> B1[先进先出]
 C[优先级调度] --> C1[紧急任务优先]
 D[资源监控] --> D1[CPU使用率]
+E[模型负载] --> E1[wan2.2-animate-mix优先级高]
+E --> E2[wanx2.1-i2v-turbo优先级中]
+E --> E3[qwen-vl-max优先级低]
 end
 subgraph "优化效果"
-E[响应时间] --> E1[减少50%]
-F[吞吐量] --> F1[提升30%]
-G[错误率] --> G1[降低40%]
-H[资源利用率] --> H1[提升25%]
+F[响应时间] --> F1[减少50%]
+G[吞吐量] --> G1[提升30%]
+H[错误率] --> H1[降低40%]
+I[资源利用率] --> I1[提升25%]
 end
 ```
+
+**更新** 新增视频换人和视觉分析模型的优先级调度
 
 ### 性能监控指标
 
@@ -356,6 +420,8 @@ end
 | 任务成功率 | >95% | 日志统计 | <90% |
 | 内存使用率 | <80% | 系统监控 | >90% |
 | CPU 使用率 | <70% | 性能分析 | >85% |
+| 视频换人成功率 | >90% | 专门监控 | <85% |
+| 视觉分析准确率 | >92% | 专门监控 | <88% |
 
 ## 部署与配置
 
@@ -367,6 +433,10 @@ end
 | NODE_ENV | 否 | development | 运行环境 |
 | PORT | 否 | 3000 | 服务器端口 |
 | MAX_FILE_SIZE | 否 | 20971520 | 文件大小限制(字节) |
+| ENABLE_VIDEO_SWAP | 否 | true | 是否启用视频换人功能 |
+| ENABLE_VISUAL_ANALYSIS | 否 | true | 是否启用视觉分析功能 |
+
+**更新** 新增视频换人和视觉分析功能的开关配置
 
 ### 部署步骤
 
@@ -377,6 +447,8 @@ end
    
    # 配置环境变量
    export DASHSCOPE_API_KEY="your-api-key"
+   export ENABLE_VIDEO_SWAP=true
+   export ENABLE_VISUAL_ANALYSIS=true
    ```
 
 2. **构建应用**
@@ -419,6 +491,10 @@ CMD ["npm", "start"]
 | 视频生成卡住 | 网络连接不稳定 | 检查网络状态，重试任务 |
 | 进度条不动 | 轮询频率过高 | 调整轮询间隔至1.5秒 |
 | 文件上传失败 | 文件格式不支持 | 检查文件类型和大小限制 |
+| 视频换人失败 | 视频URL不可访问 | 确保视频和图片URL为公网可访问 |
+| 视觉分析失败 | 视频内容质量差 | 重新拍摄或选择更清晰的视频 |
+
+**更新** 新增视频换人和视觉分析相关的故障排除指南
 
 ### 调试工具
 
@@ -433,6 +509,9 @@ F --> G[问题解决]
 H[开发调试] --> H1[启用详细日志]
 H --> H2[使用浏览器开发者工具]
 H --> H3[模拟API响应]
+I[视频换人调试] --> I1[检查URL有效性]
+I --> I2[验证模型可用性]
+I --> I3[测试基础功能]
 ```
 
 ### 监控告警
@@ -443,24 +522,30 @@ H --> H3[模拟API响应]
 | 任务失败率 | <2% | >10% | 优化任务参数 |
 | 内存使用率 | <70% | >85% | 增加内存或优化缓存 |
 | 磁盘使用率 | <80% | >90% | 清理历史文件 |
+| 视频换人成功率 | >90% | <85% | 检查输入质量和模型配置 |
+| 视觉分析准确率 | >92% | <88% | 优化提示词和输入质量 |
 
 **章节来源**
 - [app/api/ai-lab/generate-video/status/route.ts:76-86](file://app/api/ai-lab/generate-video/status/route.ts#L76-L86)
 
 ## 总结
 
-本项目成功集成了阿里云 Dashscope AI 服务，实现了完整的 AI 内容生成解决方案。通过合理的架构设计和完善的错误处理机制，为用户提供了稳定可靠的 AI 服务体验。
+本项目成功集成了阿里云 Dashscope AI 服务，实现了完整的 AI 内容生成解决方案。**最新更新**显著增强了AI内容分析能力和视频生成选项，通过合理的架构设计和完善的错误处理机制，为用户提供了更加丰富和稳定的 AI 服务体验。
 
 ### 主要成就
 
-1. **技术集成**：成功对接 Dashscope 的多个 AI 模型，包括通义千问和通义万相
-2. **用户体验**：提供了直观易用的界面和流畅的操作流程
-3. **系统稳定性**：建立了完善的错误处理和监控机制
-4. **性能优化**：通过缓存和并发控制提升了系统性能
+1. **技术集成**：成功对接 Dashscope 的多个 AI 模型，包括通义千问、通义视觉模型和通义万相
+2. **视频换人技术**：实现视频中角色替换功能，支持多种换人模式和高质量输出
+3. **视觉分析能力**：基于 qwen-vl-max 模型实现视频内容智能分析，生成精准推广文案
+4. **用户体验**：提供了直观易用的界面和流畅的操作流程
+5. **系统稳定性**：建立了完善的错误处理和监控机制
+6. **性能优化**：通过缓存和并发控制提升了系统性能
 
 ### 未来改进方向
 
-1. **模型优化**：持续关注 Dashscope 新模型的发布和升级
-2. **功能扩展**：增加更多 AI 生成能力，如语音合成、3D 内容等
-3. **性能提升**：优化算法和资源配置，进一步提升生成速度
+1. **模型优化**：持续关注 Dashscope 新模型的发布和升级，特别是视频生成和视觉分析领域的创新
+2. **功能扩展**：增加更多 AI 生成能力，如语音合成、3D 内容生成等
+3. **性能提升**：优化算法和资源配置，进一步提升生成速度和质量
 4. **用户体验**：改进界面设计和交互流程，提供更好的使用体验
+5. **多模态融合**：探索文本、图像、视频的深度融合，提供更丰富的创作工具
+6. **个性化定制**：基于用户偏好和历史行为，提供个性化的 AI 内容生成建议

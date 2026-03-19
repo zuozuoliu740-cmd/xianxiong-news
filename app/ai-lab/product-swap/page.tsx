@@ -676,7 +676,26 @@ export default function ProductSwapPage() {
                 </div>
                 {/* Actions */}
                 <div className="mt-4 flex flex-wrap justify-center gap-3">
-                  <button className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#7c3aed] to-[#ec4899] px-6 py-2.5 text-xs font-semibold text-white shadow-md hover:shadow-lg transition-all">
+                  <button
+                    onClick={async () => {
+                      if (!resultVideoUrl) return;
+                      try {
+                        const res = await fetch(resultVideoUrl);
+                        const blob = await res.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `ai-video-${Date.now()}.mp4`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                      } catch {
+                        // fallback: 直接打开链接
+                        window.open(resultVideoUrl, '_blank');
+                      }
+                    }}
+                    className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#7c3aed] to-[#ec4899] px-6 py-2.5 text-xs font-semibold text-white shadow-md hover:shadow-lg transition-all">
                     <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                     下载视频
                   </button>
@@ -691,13 +710,13 @@ export default function ProductSwapPage() {
                     {showShareMenu && (
                       <div className="absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 rounded-xl border border-[#e5e6eb] bg-white p-2 shadow-xl dark:border-[#30363d] dark:bg-[#161b22]" style={{ minWidth: 200 }}>
                         {[
-                          { name: "抖音", icon: "🎵", color: "text-[#000] dark:text-white" },
-                          { name: "快手", icon: "📹", color: "text-[#ff4906]" },
-                          { name: "小红书", icon: "📕", color: "text-[#ff2442]" },
-                          { name: "视频号", icon: "💬", color: "text-[#07c160]" },
-                          { name: "B站", icon: "📺", color: "text-[#00a1d6]" },
+                          { name: "抖音", icon: "🎵", color: "text-[#000] dark:text-white", url: "https://creator.douyin.com/creator-micro/content/upload" },
+                          { name: "快手", icon: "📹", color: "text-[#ff4906]", url: "https://cp.kuaishou.com/article/publish/video" },
+                          { name: "小红书", icon: "📕", color: "text-[#ff2442]", url: "https://creator.xiaohongshu.com/publish/publish" },
+                          { name: "视频号", icon: "💬", color: "text-[#07c160]", url: "https://channels.weixin.qq.com/platform/post/create" },
+                          { name: "B站", icon: "📺", color: "text-[#00a1d6]", url: "https://member.bilibili.com/platform/upload/video/frame" },
                         ].map((p) => (
-                          <button key={p.name} onClick={() => { setShowShareMenu(false); setApiError(`「${p.name}」发布功能即将上线，敬请期待`); }}
+                          <button key={p.name} onClick={() => { setShowShareMenu(false); window.open(p.url, '_blank'); }}
                             className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-medium text-[#1d2129] transition-colors hover:bg-[#f7f8fa] dark:text-[#e6edf3] dark:hover:bg-[#21262d]">
                             <span className="text-base">{p.icon}</span>
                             <span>发布到{p.name}</span>

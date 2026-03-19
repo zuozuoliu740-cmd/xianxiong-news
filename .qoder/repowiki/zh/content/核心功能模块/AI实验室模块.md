@@ -32,6 +32,8 @@
 ## 更新摘要
 **所做更改**
 - DashScope通义千问视频生成服务完全集成，替代了原有的模拟视频生成系统
+- 新增**视频换人功能**（Character Swap），支持使用wan2.2-animate-mix模型进行视频中人物替换
+- 新增AI驱动的内容分析功能，基于qwen-vl-max视觉模型分析视频内容生成文案
 - 新增真实的异步任务管理、图像处理增强和实时状态监控功能
 - 产品交换功能从传统多步骤向导重构为现代化步骤指示器系统
 - 新增分享功能集成，支持抖音、快手、小红书等短视频平台
@@ -45,23 +47,27 @@
 4. [架构概览](#架构概览)
 5. [详细组件分析](#详细组件分析)
 6. [DashScope集成](#dashscope集成)
-7. [文件上传系统](#文件上传系统)
-8. [视频生成管道](#视频生成管道)
-9. [历史记录管理](#历史记录管理)
-10. [步骤指示器系统](#步骤指示器系统)
-11. [分享功能集成](#分享功能集成)
-12. [依赖关系分析](#依赖关系分析)
-13. [性能考虑](#性能考虑)
-14. [故障排除指南](#故障排除指南)
-15. [结论](#结论)
+7. [视频换人功能](#视频换人功能)
+8. [AI内容分析](#ai内容分析)
+9. [文件上传系统](#文件上传系统)
+10. [视频生成管道](#视频生成管道)
+11. [历史记录管理](#历史记录管理)
+12. [步骤指示器系统](#步骤指示器系统)
+13. [分享功能集成](#分享功能集成)
+14. [依赖关系分析](#依赖关系分析)
+15. [性能考虑](#性能考虑)
+16. [故障排除指南](#故障排除指南)
+17. [结论](#结论)
 
 ## 项目概述
 
 AI实验室模块是一个集成了多种AI功能的综合性平台，现已完成从纯前端模拟到生产级API集成的重大升级。该模块的核心特色包括AI爆品替换、DashScope通义千问集成、文件上传系统、视频生成管道、历史记录管理等创新功能，旨在帮助用户快速制作高质量的电商推广内容。
 
-本次重大升级引入了完整的后端API系统，包括AI文案生成、翻译服务、文件存储、视频处理等核心功能，从前端纯模拟迁移到真实的生产级服务集成。产品交换功能经过重构，从传统的多步骤向导转变为现代化的步骤指示器系统，并新增了分享功能集成。
+**更新** 本次重大升级引入了完整的后端API系统，包括AI文案生成、翻译服务、文件存储、视频处理等核心功能，从前端纯模拟迁移到真实的生产级服务集成。特别新增了**视频换人功能**和**AI内容分析**两大核心增强功能。
 
-**更新** DashScope通义千问视频生成服务已完全集成，替代了原有的模拟视频生成系统，提供真实的异步任务管理和实时状态监控功能。
+视频换人功能基于DashScope的wan2.2-animate-mix模型，能够将视频中的角色替换为指定图片中的人物，同时保持原视频的场景、动作和表情不变。AI内容分析功能则利用qwen-vl-max视觉模型，能够分析视频内容并生成精准的推广文案。
+
+产品交换功能经过重构，从传统的多步骤向导转变为现代化的步骤指示器系统，并新增了分享功能集成。
 
 ## 项目结构
 
@@ -78,21 +84,24 @@ subgraph "AI服务集成"
 D[DashScope通义千问]
 E[阿里云存储服务]
 F[视频生成服务]
+G[视频换人服务]
+H[AI内容分析]
 end
 subgraph "核心功能模块"
-G[文件上传系统]
-H[视频生成管道]
-I[历史记录管理]
-J[AI文案生成]
-K[翻译服务]
-L[步骤指示器系统]
-M[分享功能]
+I[文件上传系统]
+J[视频生成管道]
+K[历史记录管理]
+L[AI文案生成]
+M[翻译服务]
+N[步骤指示器系统]
+O[分享功能]
+P[视频任务管理]
 end
 subgraph "传统功能"
-N[新闻搜索]
-O[新闻爬虫]
-P[翻译服务]
-Q[收藏管理]
+Q[新闻搜索]
+R[新闻爬虫]
+S[翻译服务]
+T[收藏管理]
 end
 A --> B
 A --> C
@@ -106,20 +115,24 @@ C --> J
 C --> K
 C --> L
 C --> M
-D --> N
-E --> O
-F --> P
-G --> Q
-H --> R[视频任务管理]
-I --> S[本地存储]
-J --> T[OpenAI客户端]
-K --> U[营销文案翻译]
+C --> N
+C --> O
+D --> P
+E --> Q
+F --> R
+G --> S
+H --> T
+I --> U[本地存储]
+J --> V[异步任务]
+K --> W[JSON存储]
+L --> X[OpenAI客户端]
+M --> Y[营销文案翻译]
 ```
 
 **图表来源**
 - [app/ai-lab/page.tsx:1-130](file://app/ai-lab/page.tsx#L1-L130)
-- [app/ai-lab/product-swap/page.tsx:1-687](file://app/ai-lab/product-swap/page.tsx#L1-L687)
-- [lib/aliyun/dashscope.ts:1-95](file://lib/aliyun/dashscope.ts#L1-L95)
+- [app/ai-lab/product-swap/page.tsx:1-744](file://app/ai-lab/product-swap/page.tsx#L1-L744)
+- [lib/aliyun/dashscope.ts:1-297](file://lib/aliyun/dashscope.ts#L1-L297)
 
 **章节来源**
 - [app/ai-lab/page.tsx:1-130](file://app/ai-lab/page.tsx#L1-L130)
@@ -211,13 +224,13 @@ P-->>U : 显示平台发布提示
 - [app/ai-lab/product-swap/page.tsx:134-288](file://app/ai-lab/product-swap/page.tsx#L134-L288)
 - [app/api/ai-lab/upload/route.ts:1-55](file://app/api/ai-lab/upload/route.ts#L1-L55)
 - [app/api/ai-lab/generate-desc/route.ts:1-26](file://app/api/ai-lab/generate-desc/route.ts#L1-L26)
-- [app/api/ai-lab/generate-video/route.ts:1-68](file://app/api/ai-lab/generate-video/route.ts#L1-L68)
-- [app/api/ai-lab/generate-video/status/route.ts:1-27](file://app/api/ai-lab/generate-video/status/route.ts#L1-L27)
+- [app/api/ai-lab/generate-video/route.ts:1-101](file://app/api/ai-lab/generate-video/route.ts#L1-L101)
+- [app/api/ai-lab/generate-video/status/route.ts:1-88](file://app/api/ai-lab/generate-video/status/route.ts#L1-L88)
 - [app/api/ai-lab/history/route.ts:1-119](file://app/api/ai-lab/history/route.ts#L1-L119)
 
 **章节来源**
 - [app/ai-lab/page.tsx:1-130](file://app/ai-lab/page.tsx#L1-L130)
-- [app/ai-lab/product-swap/page.tsx:1-687](file://app/ai-lab/product-swap/page.tsx#L1-L687)
+- [app/ai-lab/product-swap/page.tsx:1-744](file://app/ai-lab/product-swap/page.tsx#L1-L744)
 
 ## 架构概览
 
@@ -240,43 +253,53 @@ I[视频生成管理]
 J[历史记录服务]
 K[AI文案生成]
 L[翻译服务]
+M[视频换人处理]
+N[内容分析处理]
 end
 subgraph "数据访问层"
-M[阿里云存储]
-N[本地文件系统]
-O[内存任务队列]
-P[本地JSON存储]
-Q[通义千问API]
+O[阿里云存储]
+P[本地文件系统]
+Q[内存任务队列]
+R[本地JSON存储]
+S[通义千问API]
+T[万相视频API]
+U[视频换人API]
+V[视觉分析API]
 end
 subgraph "传统功能"
-R[新闻搜索API]
-S[新闻爬虫系统]
-T[翻译服务]
-U[收藏管理]
+W[新闻搜索API]
+X[新闻爬虫系统]
+Y[翻译服务]
+Z[收藏管理]
 end
 A --> F
 B --> G
 C --> H
 D --> F
 E --> F
-F --> M
-F --> N
 F --> O
 F --> P
 F --> Q
-G --> R
-H --> S
-I --> T
-J --> U
-K --> V[OpenAI客户端]
-L --> W[营销文案翻译]
+F --> R
+F --> S
+F --> T
+F --> U
+F --> V
+G --> W
+H --> X
+I --> Y
+J --> Z
+K --> AA[OpenAI客户端]
+L --> BB[营销文案翻译]
+M --> CC[视频换人模型]
+N --> DD[视觉分析模型]
 ```
 
 **图表来源**
 - [app/api/ai-lab/generate-desc/route.ts:1-26](file://app/api/ai-lab/generate-desc/route.ts#L1-L26)
-- [lib/aliyun/dashscope.ts:1-95](file://lib/aliyun/dashscope.ts#L1-L95)
+- [lib/aliyun/dashscope.ts:1-297](file://lib/aliyun/dashscope.ts#L1-L297)
 - [lib/aliyun/storage.ts:1-60](file://lib/aliyun/storage.ts#L1-L60)
-- [lib/video-tasks.ts:1-31](file://lib/video-tasks.ts#L1-L31)
+- [lib/video-tasks.ts:1-35](file://lib/video-tasks.ts#L1-L35)
 
 ## 详细组件分析
 
@@ -311,7 +334,7 @@ J --> K[返回新闻列表]
 
 ### 通义千问AI服务
 
-DashScope集成提供了强大的AI服务能力，包括文案生成和翻译功能：
+DashScope集成提供了强大的AI服务能力，包括文案生成、翻译功能和视频生成服务：
 
 ```mermaid
 classDiagram
@@ -320,7 +343,9 @@ class DashScopeClient {
 +generateProductDesc(params) Promise~string~
 +translateToEnglish(text) Promise~string~
 +submitVideoTask(imgUrl, prompt) Promise~SubmitVideoResult~
++submitCharacterSwapTask(imageUrl, videoUrl) Promise~SubmitVideoResult~
 +queryVideoTask(taskId) Promise~QueryVideoResult~
++generateDescFromVideo(videoUrl, swapType) Promise~string~
 }
 class ChatMessage {
 +role : "system"|"user"|"assistant"
@@ -359,7 +384,7 @@ DashScopeClient --> VideoTask
 **更新** DashScope集成现已支持完整的视频生成服务，包括任务提交、状态查询和结果获取。
 
 **章节来源**
-- [lib/aliyun/dashscope.ts:35-70](file://lib/aliyun/dashscope.ts#L35-L70)
+- [lib/aliyun/dashscope.ts:35-76](file://lib/aliyun/dashscope.ts#L35-L76)
 
 ### 翻译服务
 
@@ -377,10 +402,122 @@ T-->>U : 返回本地化英文文案
 ```
 
 **图表来源**
-- [lib/aliyun/dashscope.ts:75-94](file://lib/aliyun/dashscope.ts#L75-L94)
+- [lib/aliyun/dashscope.ts:128-147](file://lib/aliyun/dashscope.ts#L128-L147)
 
 **章节来源**
 - [lib/translator.ts:1-132](file://lib/translator.ts#L1-L132)
+
+## 视频换人功能
+
+### 视频换人技术
+
+**新增功能** 视频换人功能是本次更新的核心增强，基于DashScope的wan2.2-animate-mix模型，能够将视频中的角色替换为指定图片中的人物：
+
+```mermaid
+flowchart TD
+A[用户上传人物图片] --> B[用户上传参考视频]
+B --> C[验证文件格式和大小]
+C --> D{检查替换类型}
+D --> |模特替换| E[启动视频换人流程]
+D --> |商品/服饰替换| F[启动图生视频流程]
+E --> G[提交视频换人任务]
+F --> H[提交图生视频任务]
+G --> I[等待DashScope处理]
+H --> I
+I --> J[轮询任务状态]
+J --> K[生成结果视频]
+K --> L[返回给用户]
+```
+
+**图表来源**
+- [app/api/ai-lab/generate-video/route.ts:42-56](file://app/api/ai-lab/generate-video/route.ts#L42-L56)
+- [lib/aliyun/dashscope.ts:221-262](file://lib/aliyun/dashscope.ts#L221-L262)
+
+### 视频换人模型
+
+系统支持两种视频换人模式：
+
+| 模式 | 模型名称 | 特点 | 适用场景 |
+|------|----------|------|----------|
+| 标准模式 | wan-std | 基础视频换人功能 | 一般人物替换需求 |
+| 高质量模式 | wan-high | 更高的视频质量 | 对画质要求较高的场景 |
+
+### 视频换人流程
+
+```mermaid
+sequenceDiagram
+participant U as 用户
+participant API as 视频换人API
+participant DS as DashScope
+U->>API : 上传人物图片 + 视频
+API->>DS : 提交视频换人任务
+DS-->>API : 返回任务ID
+API->>API : 保存任务状态
+loop 轮询进度
+API->>DS : 查询任务状态
+DS-->>API : 返回处理进度
+API->>API : 更新本地状态
+end
+API-->>U : 返回生成的视频
+```
+
+**图表来源**
+- [app/api/ai-lab/generate-video/route.ts:42-56](file://app/api/ai-lab/generate-video/route.ts#L42-L56)
+- [lib/aliyun/dashscope.ts:221-262](file://lib/aliyun/dashscope.ts#L221-L262)
+
+**章节来源**
+- [app/api/ai-lab/generate-video/route.ts:42-56](file://app/api/ai-lab/generate-video/route.ts#L42-L56)
+- [lib/aliyun/dashscope.ts:221-262](file://lib/aliyun/dashscope.ts#L221-L262)
+
+## AI内容分析
+
+### 视觉内容分析
+
+**新增功能** AI内容分析功能基于qwen-vl-max视觉语言模型，能够分析视频内容并生成精准的推广文案：
+
+```mermaid
+flowchart TD
+A[用户上传AI生成视频] --> B[调用视觉分析API]
+B --> C[qwen-vl-max模型处理]
+C --> D[分析视频内容特征]
+D --> E[提取产品/服饰/人物特征]
+E --> F[生成精准文案]
+F --> G[返回分析结果]
+```
+
+**图表来源**
+- [lib/aliyun/dashscope.ts:81-123](file://lib/aliyun/dashscope.ts#L81-L123)
+
+### 内容分析能力
+
+系统能够分析以下视频内容特征：
+
+| 分析维度 | 能力描述 | 应用场景 |
+|----------|----------|----------|
+| 产品特征 | 识别产品外观、颜色、材质等 | 商品推广文案生成 |
+| 服饰特征 | 识别服装款式、搭配、风格等 | 服饰展示文案生成 |
+| 人物特征 | 识别模特特征、动作、表情等 | 模特展示文案生成 |
+| 场景氛围 | 识别拍摄场景、光线、色调等 | 整体视频氛围描述 |
+
+### 文案生成流程
+
+```mermaid
+sequenceDiagram
+participant V as 视频内容
+participant VL as qwen-vl-max模型
+participant AI as 文案生成器
+V->>VL : 视频URL + 分析请求
+VL->>VL : 分析视频内容
+VL-->>AI : 提取的特征信息
+AI->>AI : 生成营销文案
+AI-->>V : 返回文案内容
+```
+
+**图表来源**
+- [lib/aliyun/dashscope.ts:81-123](file://lib/aliyun/dashscope.ts#L81-L123)
+
+**章节来源**
+- [lib/aliyun/dashscope.ts:81-123](file://lib/aliyun/dashscope.ts#L81-L123)
 
 ## 文件上传系统
 
@@ -404,7 +541,7 @@ J --> K[前端显示文件URL]
 ```
 
 **图表来源**
-- [app/api/ai-lab/upload/route.ts:6-54](file://app/api/ai-lab/upload/route.ts#L6-L54)
+- [app/api/ai-lab/upload/route.ts:6-55](file://app/api/ai-lab/upload/route.ts#L6-L55)
 - [lib/aliyun/storage.ts:22-40](file://lib/aliyun/storage.ts#L22-L40)
 
 ### 文件存储策略
@@ -469,8 +606,8 @@ A-->>C : 返回视频URL
 **更新** DashScope通义千问视频生成服务已完全集成，提供真实的异步任务管理和实时状态监控。
 
 **章节来源**
-- [app/api/ai-lab/generate-video/route.ts:1-68](file://app/api/ai-lab/generate-video/route.ts#L1-L68)
-- [lib/video-tasks.ts:1-31](file://lib/video-tasks.ts#L1-L31)
+- [app/api/ai-lab/generate-video/route.ts:1-101](file://app/api/ai-lab/generate-video/route.ts#L1-L101)
+- [lib/video-tasks.ts:1-35](file://lib/video-tasks.ts#L1-L35)
 
 ## 历史记录管理
 
@@ -519,11 +656,10 @@ E --> F[前端刷新列表]
 
 ```mermaid
 flowchart LR
-A[步骤指示器容器] --> B[步骤1：上传视频]
-B --> C[步骤2：上传商品图]
-C --> D[步骤3：商品文案]
-D --> E[步骤4：AI生成]
-E --> F[步骤5：分享发布]
+A[步骤指示器容器] --> B[步骤1：上传素材]
+B --> C[步骤2：提示词]
+C --> D[步骤3：AI生成]
+D --> E[步骤4：文案发布]
 ```
 
 **图表来源**
@@ -535,11 +671,10 @@ E --> F[步骤5：分享发布]
 
 | 步骤编号 | 标签 | 状态条件 | 视觉效果 |
 |---------|------|----------|----------|
-| 1 | 上传视频 | 已上传视频 | 完成状态（绿色勾选） |
-| 2 | 上传商品图 | 已上传商品图片 | 完成状态（绿色勾选） |
-| 3 | 商品文案 | 已生成/填写文案 | 完成状态（绿色勾选） |
-| 4 | AI生成 | 生成中或已完成 | 当前状态（脉冲动画） |
-| 5 | 分享发布 | 生成完成 | 待激活状态（灰色） |
+| 1 | 上传素材 | 已上传视频或商品图片 | 完成状态（绿色勾选） |
+| 2 | 提示词 | 已设置视频提示词 | 完成状态（绿色勾选） |
+| 3 | AI生成 | 生成中或已完成 | 当前状态（脉冲动画） |
+| 4 | 文案发布 | 生成完成 | 待激活状态（灰色） |
 
 ### 步骤指示器设计
 
@@ -589,7 +724,7 @@ H --> I[提示功能即将上线]
 ```
 
 **图表来源**
-- [app/ai-lab/product-swap/page.tsx:645-671](file://app/ai-lab/product-swap/page.tsx#L645-L671)
+- [app/ai-lab/product-swap/page.tsx:703-728](file://app/ai-lab/product-swap/page.tsx#L703-L728)
 
 ### 分享菜单设计
 
@@ -618,10 +753,10 @@ P-->>U : 提示功能即将上线
 ```
 
 **图表来源**
-- [app/ai-lab/product-swap/page.tsx:646-670](file://app/ai-lab/product-swap/page.tsx#L646-L670)
+- [app/ai-lab/product-swap/page.tsx:703-728](file://app/ai-lab/product-swap/page.tsx#L703-L728)
 
 **章节来源**
-- [app/ai-lab/product-swap/page.tsx:645-671](file://app/ai-lab/product-swap/page.tsx#L645-L671)
+- [app/ai-lab/product-swap/page.tsx:703-728](file://app/ai-lab/product-swap/page.tsx#L703-L728)
 
 ## 依赖关系分析
 
@@ -710,6 +845,8 @@ UI组件都支持响应式布局，适配不同设备的显示需求。
 | 步骤指示器异常 | 步骤状态显示错误 | 刷新页面或检查状态管理逻辑 |
 | 分享功能失效 | 平台链接无法点击 | 检查分享菜单状态和事件绑定 |
 | DashScope任务失败 | 视频生成失败 | 检查DashScope API状态和配额限制 |
+| 视频换人失败 | 人物替换异常 | 检查输入图片和视频的质量要求 |
+| 内容分析失败 | 视频分析错误 | 检查视频格式和网络连接 |
 
 ### 调试方法
 
@@ -718,6 +855,7 @@ UI组件都支持响应式布局，适配不同设备的显示需求。
 3. **文件系统检查**：验证上传文件和历史记录存储
 4. **环境变量验证**：确认所有必需的环境变量已正确设置
 5. **DashScope状态监控**：检查任务ID和状态查询结果
+6. **视频换人参数验证**：确保输入的图片和视频URL有效
 
 **章节来源**
 - [lib/aliyun/dashscope.ts:3-6](file://lib/aliyun/dashscope.ts#L3-L6)
@@ -728,15 +866,16 @@ UI组件都支持响应式布局，适配不同设备的显示需求。
 
 AI实验室模块已完成从纯前端模拟到生产级API集成的重大升级。通过引入DashScope通义千问、完整的文件上传系统、视频生成管道、历史记录管理等核心功能，为用户提供了真正可用的AI内容创作解决方案。
 
+**更新** 本次更新特别引入了两大核心增强功能：**视频换人功能**和**AI内容分析功能**，标志着AI实验室模块从概念验证阶段正式进入生产级应用阶段。
+
 ### 主要优势
 
 1. **功能完整**：涵盖视频生成、图像处理、AI内容生成、文件管理等多个AI应用
 2. **生产级架构**：采用Node.js后端、内存任务管理、本地文件存储的稳定架构
 3. **API集成**：深度集成DashScope通义千问，提供高质量的AI服务能力
 4. **用户体验**：现代化的步骤指示器系统和分享功能，提供直观易用的操作体验
-5. **可扩展性**：模块化设计便于后续功能扩展和技术升级
-
-**更新** DashScope通义千问视频生成服务已完全集成，提供真实的异步任务管理和实时状态监控功能，替代了原有的模拟视频生成系统。
+5. **技术创新**：新增视频换人和AI内容分析两大核心功能，提升内容创作能力
+6. **可扩展性**：模块化设计便于后续功能扩展和技术升级
 
 ### 技术亮点
 
@@ -746,8 +885,16 @@ AI实验室模块已完成从纯前端模拟到生产级API集成的重大升级
 4. **历史记录持久化**：完整的任务历史追踪和管理
 5. **现代化步骤指示器**：从传统向导重构为直观的步骤导航
 6. **平台分享集成**：支持多平台一键分享功能
-7. **响应式设计**：适配多种设备和屏幕尺寸的界面
-8. **真实异步任务管理**：基于DashScope的视频生成服务，提供真实的异步处理能力
+7. **视频换人技术**：基于wan2.2-animate-mix模型的智能人物替换
+8. **AI内容分析**：基于qwen-vl-max模型的视频内容智能分析
+9. **响应式设计**：适配多种设备和屏幕尺寸的界面
+10. **真实异步任务管理**：基于DashScope的视频生成服务，提供真实的异步处理能力
+
+### 新增功能详解
+
+**视频换人功能**：这是本次更新的核心创新，基于DashScope的wan2.2-animate-mix模型，能够将视频中的角色替换为指定图片中的人物，同时保持原视频的场景、动作和表情不变。该功能支持标准和高质量两种模式，适用于各种视频换人需求。
+
+**AI内容分析功能**：基于qwen-vl-max视觉语言模型，能够分析AI生成视频的内容特征，包括产品外观、服饰搭配、人物特征等，自动生成精准的推广文案。该功能特别适用于视频内容的二次创作和营销文案生成。
 
 ### 发展方向
 
@@ -757,7 +904,9 @@ AI实验室模块已完成从纯前端模拟到生产级API集成的重大升级
 4. **国际化支持**：扩展多语言支持和本地化服务
 5. **移动端适配**：开发专门的移动端应用和优化
 6. **分享功能完善**：实现真正的平台发布功能
+7. **视频换人优化**：提升换人质量和处理速度
+8. **内容分析增强**：扩展分析维度和精度
 
-该模块现已具备成为电商内容创作领域领先解决方案的完整基础，为用户提供了一站式的AI内容生成和管理服务。通过现代化的步骤指示器系统和分享功能集成，显著提升了用户体验和操作效率。
+该模块现已具备成为电商内容创作领域领先解决方案的完整基础，为用户提供了一站式的AI内容生成和管理服务。通过现代化的步骤指示器系统、视频换人功能和AI内容分析功能，显著提升了用户体验和操作效率。
 
-**更新** DashScope通义千问视频生成服务的完全集成标志着AI实验室模块从概念验证阶段正式进入生产级应用阶段，为用户提供了真正可靠的AI内容创作工具。
+**更新** DashScope通义千问视频生成服务的完全集成以及视频换人和AI内容分析功能的引入，标志着AI实验室模块从概念验证阶段正式进入生产级应用阶段，为用户提供了真正可靠的AI内容创作工具。

@@ -16,6 +16,13 @@
 - [next.config.mjs](file://next.config.mjs)
 </cite>
 
+## 更新摘要
+**变更内容**
+- 新增视频换人功能，支持 wan2.2-animate-mix 模型
+- 增强AI文案生成能力，新增基于视频内容的视觉分析功能
+- 改进API接口，支持多种替换类型（商品、服饰、模特）
+- 优化任务状态管理和进度估算机制
+
 ## 目录
 1. [简介](#简介)
 2. [项目结构](#项目结构)
@@ -31,10 +38,14 @@
 
 这是一个基于Next.js构建的AI视频生成管道系统，专注于电商内容创作。该系统提供了完整的视频生成工作流程，包括素材上传、AI文案生成、视频合成以及结果管理等功能。
 
+**更新** 新增了强大的视频换人功能和增强的AI文案生成能力，支持多种AI模型和高级视觉分析。
+
 系统的核心特性包括：
 - 多媒体素材处理（视频和图片上传）
 - AI驱动的商品文案生成
 - 通义万相图生视频功能
+- **新增：视频换人功能（wan2.2-animate-mix模型）**
+- **新增：基于视频内容的视觉分析功能**
 - 实时进度监控和状态查询
 - 历史记录管理和分享功能
 
@@ -54,6 +65,8 @@ Upload[上传API]
 Generate[生成API]
 Status[状态查询API]
 History[历史记录API]
+Desc[文案生成API]
+Translate[翻译API]
 end
 subgraph "业务逻辑层"
 VideoTasks[视频任务管理]
@@ -63,23 +76,27 @@ end
 subgraph "外部服务"
 DashScope[通义千问]
 WanXiang[通义万相]
+QwenVL[通义视觉语言模型]
 end
 UI --> Pages
 Pages --> Upload
 Pages --> Generate
 Pages --> Status
 Pages --> History
+Pages --> Desc
+Pages --> Translate
 Upload --> Storage
 Generate --> AIModels
 Generate --> VideoTasks
 Status --> VideoTasks
 AIModels --> DashScope
 AIModels --> WanXiang
+AIModels --> QwenVL
 ```
 
 **图表来源**
-- [app/ai-lab/product-swap/page.tsx:1-687](file://app/ai-lab/product-swap/page.tsx#L1-L687)
-- [app/api/ai-lab/generate-video/route.ts:1-88](file://app/api/ai-lab/generate-video/route.ts#L1-L88)
+- [app/ai-lab/product-swap/page.tsx:1-744](file://app/ai-lab/product-swap/page.tsx#L1-L744)
+- [app/api/ai-lab/generate-video/route.ts:1-101](file://app/api/ai-lab/generate-video/route.ts#L1-L101)
 
 **章节来源**
 - [package.json:1-33](file://package.json#L1-L33)
@@ -103,6 +120,7 @@ class VideoTask {
 +string error
 +string dashscopeTaskId
 +number pollCount
++SwapType swapType
 }
 class TaskManager {
 +Map~string,VideoTask~ videoTasks
@@ -133,6 +151,7 @@ class DashScopeAPI {
 +generateProductDesc(params) Promise~string~
 +translateToEnglish(text) Promise~string~
 +submitVideoTask(imgUrl, prompt, options) Promise
++submitCharacterSwapTask(imageUrl, videoUrl, options) Promise
 +queryVideoTask(taskId) Promise
 }
 class OpenAIAdapter {
@@ -141,18 +160,23 @@ class OpenAIAdapter {
 }
 class VideoSynthesisAPI {
 +submitVideoTask(imgUrl, prompt, options) Promise
++submitCharacterSwapTask(imageUrl, videoUrl, options) Promise
 +queryVideoTask(taskId) Promise
+}
+class VisualAnalysisAPI {
++generateDescFromVideo(videoUrl, swapType) Promise~string~
 }
 DashScopeAPI --> OpenAIAdapter : uses
 DashScopeAPI --> VideoSynthesisAPI : uses
+DashScopeAPI --> VisualAnalysisAPI : uses
 ```
 
 **图表来源**
-- [lib/aliyun/dashscope.ts:1-191](file://lib/aliyun/dashscope.ts#L1-L191)
+- [lib/aliyun/dashscope.ts:1-297](file://lib/aliyun/dashscope.ts#L1-L297)
 
 **章节来源**
 - [lib/video-tasks.ts:1-35](file://lib/video-tasks.ts#L1-L35)
-- [lib/aliyun/dashscope.ts:1-191](file://lib/aliyun/dashscope.ts#L1-L191)
+- [lib/aliyun/dashscope.ts:1-297](file://lib/aliyun/dashscope.ts#L1-L297)
 
 ## 架构概览
 
@@ -171,7 +195,11 @@ UploadAPI->>UploadAPI : 验证文件类型和大小
 UploadAPI->>UploadAPI : 保存到本地存储
 UploadAPI-->>Client : 返回文件URL
 Client->>GenerateAPI : 提交生成请求
+alt 模特替换模式
+GenerateAPI->>DashScope : 提交视频换人任务 (wan2.2-animate-mix)
+else 商品/服饰替换模式
 GenerateAPI->>DashScope : 创建视频生成任务
+end
 DashScope-->>GenerateAPI : 返回任务ID
 GenerateAPI->>TaskStore : 存储任务信息
 GenerateAPI-->>Client : 返回任务ID
@@ -186,7 +214,7 @@ Client->>Client : 下载生成的视频
 ```
 
 **图表来源**
-- [app/api/ai-lab/generate-video/route.ts:30-88](file://app/api/ai-lab/generate-video/route.ts#L30-L88)
+- [app/api/ai-lab/generate-video/route.ts:30-101](file://app/api/ai-lab/generate-video/route.ts#L30-L101)
 - [app/api/ai-lab/generate-video/status/route.ts:16-88](file://app/api/ai-lab/generate-video/status/route.ts#L16-L88)
 
 ## 详细组件分析
@@ -224,9 +252,10 @@ Download --> End[完成]
 | `generating` | 视频生成中 | 用户点击生成按钮 |
 | `resultReady` | 生成完成 | 任务状态变为completed |
 | `showHistory` | 显示历史记录 | 用户点击历史按钮 |
+| **新增** `swapType` | 替换类型（product/clothing/model） | 用户选择替换类型 |
 
 **章节来源**
-- [app/ai-lab/product-swap/page.tsx:37-687](file://app/ai-lab/product-swap/page.tsx#L37-L687)
+- [app/ai-lab/product-swap/page.tsx:37-744](file://app/ai-lab/product-swap/page.tsx#L37-L744)
 
 ### 后端API服务组件
 
@@ -239,18 +268,23 @@ flowchart TD
 Request[POST /api/ai-lab/generate-video] --> ValidateInput[验证输入参数]
 ValidateInput --> CheckImages{检查图片数量}
 CheckImages --> |不足| ReturnError[返回错误]
-CheckImages --> |满足| ConvertImage[转换首张图片]
+CheckImages --> |满足| CheckSwapType{检查替换类型}
+CheckSwapType --> |model| CheckVideo{检查视频URL}
+CheckVideo --> |存在| SubmitCharacterSwap[提交视频换人任务]
+CheckVideo --> |不存在| ReturnError
+CheckSwapType --> |product/clothing| ConvertImage[转换首张图片]
 ConvertImage --> CheckURL{检查图片URL类型}
 CheckURL --> |公网URL| UseDirect[直接使用URL]
 CheckURL --> |本地路径| ConvertBase64[转换为Base64]
 UseDirect --> SubmitTask[提交到DashScope]
 ConvertBase64 --> SubmitTask
-SubmitTask --> CreateTask[创建本地任务]
+SubmitCharacterSwap --> CreateTask[创建本地任务]
+SubmitTask --> CreateTask
 CreateTask --> ReturnResponse[返回任务ID]
 ```
 
 **图表来源**
-- [app/api/ai-lab/generate-video/route.ts:30-88](file://app/api/ai-lab/generate-video/route.ts#L30-L88)
+- [app/api/ai-lab/generate-video/route.ts:30-101](file://app/api/ai-lab/generate-video/route.ts#L30-L101)
 
 #### 任务状态查询API
 
@@ -281,7 +315,7 @@ ReturnFailed --> End
 - [app/api/ai-lab/generate-video/status/route.ts:16-88](file://app/api/ai-lab/generate-video/status/route.ts#L16-L88)
 
 **章节来源**
-- [app/api/ai-lab/generate-video/route.ts:1-88](file://app/api/ai-lab/generate-video/route.ts#L1-L88)
+- [app/api/ai-lab/generate-video/route.ts:1-101](file://app/api/ai-lab/generate-video/route.ts#L1-L101)
 - [app/api/ai-lab/generate-video/status/route.ts:1-88](file://app/api/ai-lab/generate-video/status/route.ts#L1-L88)
 
 ### AI服务集成组件
@@ -290,15 +324,16 @@ ReturnFailed --> End
 
 系统集成了多种AI服务来提供完整的功能：
 
-| 服务类型 | 功能描述 | 使用场景 |
-|----------|----------|----------|
-| 通义千问 | 文本生成和对话 | 商品文案生成、翻译服务 |
-| 通义万相 | 图生视频 | 视频合成和生成 |
-| 本地存储 | 文件上传和管理 | 用户素材存储 |
+| 服务类型 | 功能描述 | 使用场景 | **新增** 模型 |
+|----------|----------|----------|---------------|
+| 通义千问 | 文本生成和对话 | 商品文案生成、翻译服务 | qwen-max |
+| 通义万相 | 图生视频 | 视频合成和生成 | wanx2.1-i2v-turbo |
+| **新增** 通义视觉语言模型 | **基于视频内容的视觉分析** | **AI生成文案** | **qwen-vl-max** |
+| **新增** 视频换人模型 | **将视频中的角色替换为指定图片中的人物** | **模特替换功能** | **wan2.2-animate-mix** |
 
 **章节来源**
-- [lib/aliyun/dashscope.ts:32-94](file://lib/aliyun/dashscope.ts#L32-L94)
-- [lib/aliyun/dashscope.ts:112-191](file://lib/aliyun/dashscope.ts#L112-L191)
+- [lib/aliyun/dashscope.ts:32-123](file://lib/aliyun/dashscope.ts#L32-L123)
+- [lib/aliyun/dashscope.ts:215-296](file://lib/aliyun/dashscope.ts#L215-L296)
 
 ## 依赖关系分析
 
@@ -310,6 +345,8 @@ subgraph "外部依赖"
 NextJS[Next.js框架]
 OpenAI[OpenAI SDK]
 UUID[UUID库]
+DashScope[DashScope API]
+QwenVL[Qwen VL Model]
 end
 subgraph "内部模块"
 UploadRoute[上传路由]
@@ -321,6 +358,8 @@ HistoryRoute[历史路由]
 VideoTasks[任务管理]
 DashScopeAPI[DashScope接口]
 StorageAPI[存储接口]
+VisualAnalysis[视觉分析]
+CharacterSwap[视频换人]
 end
 NextJS --> UploadRoute
 NextJS --> GenerateRoute
@@ -331,11 +370,15 @@ NextJS --> HistoryRoute
 UploadRoute --> StorageAPI
 GenerateRoute --> DashScopeAPI
 GenerateRoute --> VideoTasks
+GenerateRoute --> CharacterSwap
+GenerateRoute --> VisualAnalysis
 StatusRoute --> VideoTasks
 DescRoute --> DashScopeAPI
+DescRoute --> VisualAnalysis
 TranslateRoute --> DashScopeAPI
 HistoryRoute --> HistoryRoute
 DashScopeAPI --> OpenAI
+DashScopeAPI --> QwenVL
 StorageAPI --> UUID
 ```
 
@@ -354,6 +397,7 @@ StorageAPI --> UUID
 1. **非阻塞I/O操作**：所有文件操作都使用异步方法
 2. **内存存储优化**：使用Map数据结构存储任务状态
 3. **智能轮询策略**：根据任务状态动态调整轮询频率
+4. ****新增** 模型特定优化**：不同AI模型采用不同的进度估算算法
 
 ### 缓存策略
 
@@ -375,6 +419,7 @@ ReturnResult --> End
 1. **输入验证**：在API层进行严格的参数验证
 2. **异常捕获**：使用try-catch处理异步操作异常
 3. **状态回滚**：在失败情况下自动回滚到安全状态
+4. ****新增** 模型兼容性处理**：不同模型返回格式的适配
 
 ## 故障排除指南
 
@@ -384,6 +429,8 @@ ReturnResult --> End
 |----------|------|----------|----------|
 | 上传失败 | 文件无法上传 | 文件类型不支持 | 检查文件格式和大小限制 |
 | 生成失败 | 视频生成任务失败 | API密钥配置错误 | 验证DashScope API密钥 |
+| **新增** 模特替换失败 | 视频换人任务失败 | **视频URL不可访问** | **确保视频和图片URL为公网可访问** |
+| **新增** 文案生成失败 | **基于视频内容的文案生成失败** | **视频内容分析失败** | **检查视频质量和格式** |
 | 进度停滞 | 状态查询无响应 | 网络连接问题 | 检查网络连接和防火墙设置 |
 | 内存泄漏 | 内存使用持续增长 | 任务清理机制失效 | 检查任务过期清理逻辑 |
 
@@ -392,10 +439,11 @@ ReturnResult --> End
 1. **日志监控**：系统在关键节点记录详细日志
 2. **状态检查**：通过状态API检查任务执行情况
 3. **性能分析**：使用浏览器开发者工具分析前端性能
+4. ****新增** 模型调试**：监控不同AI模型的响应时间和成功率
 
 **章节来源**
-- [app/api/ai-lab/generate-video/route.ts:80-86](file://app/api/ai-lab/generate-video/route.ts#L80-L86)
-- [app/api/ai-lab/generate-video/status/route.ts:76-86](file://app/api/ai-lab/generate-video/status/route.ts#L76-L86)
+- [app/api/ai-lab/generate-video/route.ts:80-101](file://app/api/ai-lab/generate-video/route.ts#L80-L101)
+- [app/api/ai-lab/generate-video/status/route.ts:76-88](file://app/api/ai-lab/generate-video/status/route.ts#L76-L88)
 
 ## 结论
 
@@ -406,5 +454,7 @@ ReturnResult --> End
 3. **用户体验**：直观的界面设计和流畅的交互流程
 4. **扩展性**：良好的架构设计便于功能扩展
 5. **可靠性**：完善的错误处理和监控机制
+6. ****新增** 多模型支持**：灵活的AI模型选择和切换机制
+7. ****新增** 智能内容分析**：基于视频内容的AI文案生成能力
 
-系统为电商内容创作者提供了完整的解决方案，从素材准备到最终发布的全流程自动化，大大提高了内容创作的效率和质量。
+**更新** 系统现已支持视频换人功能和增强的AI文案生成能力，为电商内容创作者提供了更加全面和强大的解决方案。从基础的素材准备到高级的视频内容分析，再到最终的多平台发布，系统实现了全流程的自动化和智能化，大大提高了内容创作的效率和质量。
