@@ -1,31 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { videoTasks, VideoTask } from "@/lib/video-tasks";
+import { submitVideoTask } from "@/lib/aliyun/dashscope";
+import fs from "fs";
+import path from "path";
 
 export const runtime = "nodejs";
 
-// 模拟进度推进
-function simulateProgress(taskId: string) {
-  const task = videoTasks.get(taskId);
-  if (!task) return;
-
-  task.status = "processing";
-  let progress = 0;
-
-  const timer = setInterval(() => {
-    progress += Math.random() * 15 + 5;
-    const t = videoTasks.get(taskId);
-    if (!t) { clearInterval(timer); return; }
-
-    if (progress >= 100) {
-      t.progress = 100;
-      t.status = "completed";
-      t.resultUrl = "/uploads/videos/sample-result.mp4";
-      clearInterval(timer);
-    } else {
-      t.progress = Math.round(progress);
+/** 将本地上传图片转为 Base64 data URI，供DashScope API使用 */
+function localImageToBase64(imageUrl: string): string | null {
+  try {
+    // imageUrl 格式为 /uploads/images/xxx.jpg
+    const relativePath = imageUrl.startsWith("/") ? imageUrl : `/${imageUrl}`;
+    const filePath = path.join(process.cwd(), "public", relativePath);
+    if (!fs.existsSync(filePath)) {
+      console.warn(`[generate-video] 图片文件不存在: ${filePath}`);
+      return null;
     }
-  }, 1000);
+    const buffer = fs.readFileSync(filePath);
+    const ext = path.extname(filePath).toLowerCase().replace(".", "");
+    const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+    return `data:${mime};base64,${buffer.toString("base64")}`;
+  } catch (err) {
+    console.error(`[generate-video] Base64转换失败:`, err);
+    return null;
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -40,22 +39,43 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "缺少商品文案" }, { status: 400 });
     }
 
+    // 取第一张图片作为首帧图，转 Base64
+    const firstImage = imageUrls[0];
+    let imgForApi: string;
+
+    if (firstImage.startsWith("http://") || firstImage.startsWith("https://")) {
+      imgForApi = firstImage; // 已是公网URL
+    } else {
+      const base64 = localImageToBase64(firstImage);
+      if (!base64) {
+        return NextResponse.json({ error: "图片读取失败，请重新上传" }, { status: 400 });
+      }
+      imgForApi = base64;
+    }
+
+    // 提交到DashScope万相图生视频
+    const prompt = needEnglish && englishDesc ? `${desc}\n${englishDesc}` : desc;
+    const dsResult = await submitVideoTask(imgForApi, prompt);
+
     const taskId = uuidv4();
     const task: VideoTask = {
       id: taskId,
-      status: "pending",
-      progress: 0,
+      status: "processing",
+      progress: 5,
       createdAt: new Date().toISOString(),
       params: { videoUrl, imageUrls, desc, swapType, needEnglish, englishDesc },
+      dashscopeTaskId: dsResult.taskId,
+      pollCount: 0,
     };
 
     videoTasks.set(taskId, task);
-    setTimeout(() => simulateProgress(taskId), 500);
+
+    console.log(`[generate-video] 任务已创建: ${taskId} -> DashScope: ${dsResult.taskId}`);
 
     return NextResponse.json({
       success: true,
       taskId,
-      message: videoUrl ? "视频替换任务已创建" : "图生视频任务已创建",
+      message: "图生视频任务已提交到通义万相",
     });
   } catch (error: any) {
     console.error("Generate video error:", error);

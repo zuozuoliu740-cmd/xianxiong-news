@@ -18,6 +18,10 @@ export interface VideoTask {
   };
   resultUrl?: string;
   error?: string;
+  /** DashScope 万相视频生成任务ID */
+  dashscopeTaskId?: string;
+  /** 轮询次数，用于估算进度 */
+  pollCount?: number;
 }
 
 // 全局单例存储

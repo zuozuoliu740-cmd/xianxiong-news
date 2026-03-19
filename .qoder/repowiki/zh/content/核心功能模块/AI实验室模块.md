@@ -25,17 +25,16 @@
 - [components/SearchBar.tsx](file://components/SearchBar.tsx)
 - [components/CategoryTabs.tsx](file://components/CategoryTabs.tsx)
 - [components/NewsSummary.tsx](file://components/NewsSummary.tsx)
+- [app/globals.css](file://app/globals.css)
 - [package.json](file://package.json)
 </cite>
 
 ## 更新摘要
 **所做更改**
-- 新增多模块AI功能集成：DashScope通义千问API集成
-- 新增完整的文件上传系统：支持视频和图片上传
-- 新增视频生成管道：完整的视频生成和状态管理
-- 新增历史记录管理：本地持久化存储和管理
-- 更新产品替换功能：从前端模拟迁移到生产级API集成
-- 新增AI文案生成和翻译功能：基于DashScope的智能内容生成
+- 产品交换功能从传统多步骤向导重构为现代化步骤指示器系统
+- 新增分享功能集成，支持抖音、快手、小红书等短视频平台
+- 简化状态管理和UI设计，提升用户体验
+- 保持完整的AI功能集成和API服务
 
 ## 目录
 1. [项目概述](#项目概述)
@@ -47,16 +46,18 @@
 7. [文件上传系统](#文件上传系统)
 8. [视频生成管道](#视频生成管道)
 9. [历史记录管理](#历史记录管理)
-10. [依赖关系分析](#依赖关系分析)
-11. [性能考虑](#性能考虑)
-12. [故障排除指南](#故障排除指南)
-13. [结论](#结论)
+10. [步骤指示器系统](#步骤指示器系统)
+11. [分享功能集成](#分享功能集成)
+12. [依赖关系分析](#依赖关系分析)
+13. [性能考虑](#性能考虑)
+14. [故障排除指南](#故障排除指南)
+15. [结论](#结论)
 
 ## 项目概述
 
 AI实验室模块是一个集成了多种AI功能的综合性平台，现已完成从纯前端模拟到生产级API集成的重大升级。该模块的核心特色包括AI爆品替换、DashScope通义千问集成、文件上传系统、视频生成管道、历史记录管理等创新功能，旨在帮助用户快速制作高质量的电商推广内容。
 
-本次重大升级引入了完整的后端API系统，包括AI文案生成、翻译服务、文件存储、视频处理等核心功能，从前端纯模拟迁移到真实的生产级服务集成。
+本次重大升级引入了完整的后端API系统，包括AI文案生成、翻译服务、文件存储、视频处理等核心功能，从前端纯模拟迁移到真实的生产级服务集成。产品交换功能经过重构，从传统的多步骤向导转变为现代化的步骤指示器系统，并新增了分享功能集成。
 
 ## 项目结构
 
@@ -80,12 +81,14 @@ H[视频生成管道]
 I[历史记录管理]
 J[AI文案生成]
 K[翻译服务]
+L[步骤指示器系统]
+M[分享功能]
 end
 subgraph "传统功能"
-L[新闻搜索]
-M[新闻爬虫]
-N[翻译服务]
-O[收藏管理]
+N[新闻搜索]
+O[新闻爬虫]
+P[翻译服务]
+Q[收藏管理]
 end
 A --> B
 A --> C
@@ -97,19 +100,21 @@ C --> H
 C --> I
 C --> J
 C --> K
-D --> L
-E --> M
-F --> N
-G --> O
-H --> P[视频任务管理]
-I --> Q[本地存储]
-J --> R[OpenAI客户端]
-K --> S[营销文案翻译]
+C --> L
+C --> M
+D --> N
+E --> O
+F --> P
+G --> Q
+H --> R[视频任务管理]
+I --> S[本地存储]
+J --> T[OpenAI客户端]
+K --> U[营销文案翻译]
 ```
 
 **图表来源**
 - [app/ai-lab/page.tsx:1-130](file://app/ai-lab/page.tsx#L1-L130)
-- [app/ai-lab/product-swap/page.tsx:1-831](file://app/ai-lab/product-swap/page.tsx#L1-L831)
+- [app/ai-lab/product-swap/page.tsx:1-687](file://app/ai-lab/product-swap/page.tsx#L1-L687)
 - [lib/aliyun/dashscope.ts:1-95](file://lib/aliyun/dashscope.ts#L1-L95)
 
 **章节来源**
@@ -154,25 +159,31 @@ Module --> Tag
 
 ### 产品替换功能
 
-产品替换功能是AI实验室的核心模块，现已完全迁移到生产级API集成：
+产品替换功能是AI实验室的核心模块，现已完全迁移到生产级API集成，并重构为现代化的步骤指示器系统：
 
 ```mermaid
 sequenceDiagram
 participant U as 用户
 participant P as 产品替换页面
+participant SI as 步骤指示器
 participant API as AI实验室API
 participant DS as DashScope
 participant ST as 存储服务
+U->>P : 访问产品替换页面
+P->>SI : 显示步骤指示器
+SI-->>U : 当前步骤1：上传视频
 U->>P : 上传视频/图片
 P->>API : POST /api/ai-lab/upload
 API->>ST : 保存文件
 ST-->>API : 返回文件URL
 API-->>P : 上传成功
+SI-->>U : 步骤2：上传商品图
 U->>P : 填写商品详情
 P->>API : POST /api/ai-lab/generate-desc
 API->>DS : 生成文案
 DS-->>API : 返回生成文案
 API-->>P : 显示生成文案
+SI-->>U : 步骤3：商品文案
 U->>P : 开始生成
 P->>API : POST /api/ai-lab/generate-video
 API->>API : 创建视频任务
@@ -181,11 +192,18 @@ loop 轮询进度
 P->>API : GET /api/ai-lab/generate-video/status
 API-->>P : 返回进度状态
 end
+SI-->>U : 步骤4：AI生成
 P->>API : POST /api/ai-lab/history
 API-->>P : 保存历史记录
+SI-->>U : 步骤5：分享发布
+U->>P : 点击分享按钮
+P->>P : 显示分享菜单
+U->>P : 选择目标平台
+P-->>U : 显示平台发布提示
 ```
 
 **图表来源**
+- [app/ai-lab/product-swap/page.tsx:306-349](file://app/ai-lab/product-swap/page.tsx#L306-L349)
 - [app/ai-lab/product-swap/page.tsx:134-288](file://app/ai-lab/product-swap/page.tsx#L134-L288)
 - [app/api/ai-lab/upload/route.ts:1-55](file://app/api/ai-lab/upload/route.ts#L1-L55)
 - [app/api/ai-lab/generate-desc/route.ts:1-26](file://app/api/ai-lab/generate-desc/route.ts#L1-L26)
@@ -195,7 +213,7 @@ API-->>P : 保存历史记录
 
 **章节来源**
 - [app/ai-lab/page.tsx:1-130](file://app/ai-lab/page.tsx#L1-L130)
-- [app/ai-lab/product-swap/page.tsx:1-831](file://app/ai-lab/product-swap/page.tsx#L1-L831)
+- [app/ai-lab/product-swap/page.tsx:1-687](file://app/ai-lab/product-swap/page.tsx#L1-L687)
 
 ## 架构概览
 
@@ -207,43 +225,47 @@ subgraph "表现层"
 A[AI实验室页面]
 B[产品替换页面]
 C[新闻展示组件]
+D[步骤指示器组件]
+E[分享菜单组件]
 end
 subgraph "业务逻辑层"
-D[AI实验室API处理]
-E[DashScope集成]
-F[文件上传处理]
-G[视频生成管理]
-H[历史记录服务]
-I[AI文案生成]
-J[翻译服务]
+F[AI实验室API处理]
+G[DashScope集成]
+H[文件上传处理]
+I[视频生成管理]
+J[历史记录服务]
+K[AI文案生成]
+L[翻译服务]
 end
 subgraph "数据访问层"
-K[阿里云存储]
-L[本地文件系统]
-M[内存任务队列]
-N[本地JSON存储]
-O[通义千问API]
+M[阿里云存储]
+N[本地文件系统]
+O[内存任务队列]
+P[本地JSON存储]
+Q[通义千问API]
 end
 subgraph "传统功能"
-P[新闻搜索API]
-Q[新闻爬虫系统]
-R[翻译服务]
-S[收藏管理]
+R[新闻搜索API]
+S[新闻爬虫系统]
+T[翻译服务]
+U[收藏管理]
 end
-A --> D
-B --> E
-C --> F
-D --> K
-D --> L
-D --> M
-D --> N
-D --> O
-E --> P
+A --> F
+B --> G
+C --> H
+D --> F
+E --> F
+F --> M
+F --> N
+F --> O
+F --> P
 F --> Q
 G --> R
 H --> S
-I --> T[OpenAI客户端]
-J --> U[营销文案翻译]
+I --> T
+J --> U
+K --> V[OpenAI客户端]
+L --> W[营销文案翻译]
 ```
 
 **图表来源**
@@ -363,8 +385,8 @@ B --> |视频| C[检查MP4/MOV格式]
 B --> |图片| D[检查PNG/JPG/WebP格式]
 C --> E{检查文件大小}
 D --> E
-E --> |超过200MB| F[返回错误]
-E --> |小于等于200MB| G[保存到服务器]
+E --> |超过限制| F[返回错误]
+E --> |在限制内| G[保存到服务器]
 F --> H[显示错误信息]
 G --> I[生成唯一文件名]
 I --> J[返回上传结果]
@@ -477,6 +499,118 @@ E --> F[前端刷新列表]
 **章节来源**
 - [app/api/ai-lab/history/route.ts:12-24](file://app/api/ai-lab/history/route.ts#L12-L24)
 
+## 步骤指示器系统
+
+### 现代化步骤导航
+
+产品替换功能经过重构，从传统的多步骤向导转变为现代化的步骤指示器系统，提供更直观的用户体验：
+
+```mermaid
+flowchart LR
+A[步骤指示器容器] --> B[步骤1：上传视频]
+B --> C[步骤2：上传商品图]
+C --> D[步骤3：商品文案]
+D --> E[步骤4：AI生成]
+E --> F[步骤5：分享发布]
+```
+
+**图表来源**
+- [app/ai-lab/product-swap/page.tsx:306-349](file://app/ai-lab/product-swap/page.tsx#L306-L349)
+
+### 步骤状态管理
+
+系统实现了智能的步骤状态管理，包括完成状态、激活状态和当前状态：
+
+| 步骤编号 | 标签 | 状态条件 | 视觉效果 |
+|---------|------|----------|----------|
+| 1 | 上传视频 | 已上传视频 | 完成状态（绿色勾选） |
+| 2 | 上传商品图 | 已上传商品图片 | 完成状态（绿色勾选） |
+| 3 | 商品文案 | 已生成/填写文案 | 完成状态（绿色勾选） |
+| 4 | AI生成 | 生成中或已完成 | 当前状态（脉冲动画） |
+| 5 | 分享发布 | 生成完成 | 待激活状态（灰色） |
+
+### 步骤指示器设计
+
+```mermaid
+classDiagram
+class StepIndicator {
++steps : Step[]
++currentStep : number
++render() JSX.Element
+}
+class Step {
++num : number
++label : string
++done : boolean
++isActive : boolean
++isCurrent : boolean
+}
+StepIndicator --> Step
+```
+
+**图表来源**
+- [app/ai-lab/product-swap/page.tsx:310-346](file://app/ai-lab/product-swap/page.tsx#L310-L346)
+
+**章节来源**
+- [app/ai-lab/product-swap/page.tsx:306-349](file://app/ai-lab/product-swap/page.tsx#L306-L349)
+
+## 分享功能集成
+
+### 平台分享系统
+
+新增的分享功能集成了多个主流短视频平台，提供一键分享到目标平台的能力：
+
+```mermaid
+flowchart TD
+A[用户点击分享按钮] --> B{显示分享菜单}
+B --> C[抖音]
+B --> D[快手]
+B --> E[小红书]
+B --> F[视频号]
+B --> G[B站]
+C --> H[显示平台发布提示]
+D --> H
+E --> H
+F --> H
+G --> H
+H --> I[提示功能即将上线]
+```
+
+**图表来源**
+- [app/ai-lab/product-swap/page.tsx:645-671](file://app/ai-lab/product-swap/page.tsx#L645-L671)
+
+### 分享菜单设计
+
+系统实现了响应式的分享菜单，支持下拉展开和平台选择：
+
+| 平台名称 | 图标 | 颜色主题 | 功能状态 |
+|---------|------|----------|----------|
+| 抖音 | 🎵 | 黑色 | 即将上线 |
+| 快手 | 📹 | 橙色 | 即将上线 |
+| 小红书 | 📕 | 粉色 | 即将上线 |
+| 视频号 | 💬 | 绿色 | 即将上线 |
+| B站 | 📺 | 蓝色 | 即将上线 |
+
+### 分享流程
+
+```mermaid
+sequenceDiagram
+participant U as 用户
+participant SM as 分享菜单
+participant P as 目标平台
+U->>SM : 点击分享按钮
+SM-->>U : 展示平台选项
+U->>SM : 选择目标平台
+SM->>P : 显示平台发布提示
+P-->>U : 提示功能即将上线
+```
+
+**图表来源**
+- [app/ai-lab/product-swap/page.tsx:646-670](file://app/ai-lab/product-swap/page.tsx#L646-L670)
+
+**章节来源**
+- [app/ai-lab/product-swap/page.tsx:645-671](file://app/ai-lab/product-swap/page.tsx#L645-L671)
+
 ## 依赖关系分析
 
 项目的主要依赖关系已经完全重构为生产级架构：
@@ -559,6 +693,8 @@ UI组件都支持响应式布局，适配不同设备的显示需求。
 | 视频生成超时 | 任务长时间pending | 检查服务器资源和网络连接 |
 | 历史记录丢失 | JSON文件损坏 | 检查data目录权限和磁盘空间 |
 | 进度查询失败 | 404任务不存在 | 检查任务ID是否正确传递 |
+| 步骤指示器异常 | 步骤状态显示错误 | 刷新页面或检查状态管理逻辑 |
+| 分享功能失效 | 平台链接无法点击 | 检查分享菜单状态和事件绑定 |
 
 ### 调试方法
 
@@ -581,7 +717,7 @@ AI实验室模块已完成从纯前端模拟到生产级API集成的重大升级
 1. **功能完整**：涵盖视频生成、图像处理、AI内容生成、文件管理等多个AI应用
 2. **生产级架构**：采用Node.js后端、内存任务管理、本地文件存储的稳定架构
 3. **API集成**：深度集成DashScope通义千问，提供高质量的AI服务能力
-4. **用户体验**：提供了直观易用的界面和流畅的全流程操作体验
+4. **用户体验**：现代化的步骤指示器系统和分享功能，提供直观易用的操作体验
 5. **可扩展性**：模块化设计便于后续功能扩展和技术升级
 
 ### 技术亮点
@@ -590,7 +726,9 @@ AI实验室模块已完成从纯前端模拟到生产级API集成的重大升级
 2. **多格式文件支持**：完整的视频和图片上传处理系统
 3. **实时进度跟踪**：可视化视频生成进度和状态管理
 4. **历史记录持久化**：完整的任务历史追踪和管理
-5. **响应式设计**：适配多种设备和屏幕尺寸的界面
+5. **现代化步骤指示器**：从传统向导重构为直观的步骤导航
+6. **平台分享集成**：支持多平台一键分享功能
+7. **响应式设计**：适配多种设备和屏幕尺寸的界面
 
 ### 发展方向
 
@@ -599,5 +737,6 @@ AI实验室模块已完成从纯前端模拟到生产级API集成的重大升级
 3. **功能完善**：添加视频编辑、批量处理等高级功能
 4. **国际化支持**：扩展多语言支持和本地化服务
 5. **移动端适配**：开发专门的移动端应用和优化
+6. **分享功能完善**：实现真正的平台发布功能
 
-该模块现已具备成为电商内容创作领域领先解决方案的完整基础，为用户提供了一站式的AI内容生成和管理服务。
+该模块现已具备成为电商内容创作领域领先解决方案的完整基础，为用户提供了一站式的AI内容生成和管理服务。通过现代化的步骤指示器系统和分享功能集成，显著提升了用户体验和操作效率。

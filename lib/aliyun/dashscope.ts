@@ -92,3 +92,99 @@ Requirements:
 
   return chatCompletion(messages, { temperature: 0.7 });
 }
+
+// ========== 万相图生视频 API ==========
+
+const DASHSCOPE_BASE = "https://dashscope.aliyuncs.com";
+const VIDEO_SYNTHESIS_URL = `${DASHSCOPE_BASE}/api/v1/services/aigc/video-generation/video-synthesis`;
+const TASK_QUERY_URL = `${DASHSCOPE_BASE}/api/v1/tasks`;
+
+export interface SubmitVideoResult {
+  taskId: string;
+}
+
+export interface QueryVideoResult {
+  status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "UNKNOWN";
+  videoUrl?: string;
+  error?: string;
+}
+
+/**
+ * 提交图生视频任务（通义万相）
+ * @param imgUrl - 图片公网URL或Base64编码
+ * @param prompt - 描述提示词
+ */
+export async function submitVideoTask(
+  imgUrl: string,
+  prompt: string,
+  options?: { model?: string; resolution?: string; duration?: number }
+): Promise<SubmitVideoResult> {
+  const apiKey = process.env.DASHSCOPE_API_KEY;
+  if (!apiKey) throw new Error("DASHSCOPE_API_KEY 未配置");
+
+  const { model = "wan2.1-i2v-turbo", resolution = "720P", duration = 5 } = options || {};
+
+  const res = await fetch(VIDEO_SYNTHESIS_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+      "X-DashScope-Async": "enable",
+    },
+    body: JSON.stringify({
+      model,
+      input: {
+        prompt: prompt.slice(0, 800),
+        img_url: imgUrl,
+      },
+      parameters: {
+        resolution,
+        duration,
+        prompt_extend: true,
+      },
+    }),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok || data.code) {
+    throw new Error(data.message || `DashScope 视频任务创建失败 (${res.status})`);
+  }
+
+  const taskId = data.output?.task_id;
+  if (!taskId) throw new Error("未返回 task_id");
+
+  console.log(`[wanx-video] 任务已提交: ${taskId}`);
+  return { taskId };
+}
+
+/**
+ * 查询视频生成任务状态
+ */
+export async function queryVideoTask(taskId: string): Promise<QueryVideoResult> {
+  const apiKey = process.env.DASHSCOPE_API_KEY;
+  if (!apiKey) throw new Error("DASHSCOPE_API_KEY 未配置");
+
+  const res = await fetch(`${TASK_QUERY_URL}/${taskId}`, {
+    method: "GET",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+    },
+  });
+
+  const data = await res.json();
+  const output = data.output || {};
+  const status = output.task_status || "UNKNOWN";
+
+  if (status === "SUCCEEDED") {
+    console.log(`[wanx-video] 任务完成: ${taskId}, video_url: ${output.video_url}`);
+    return { status, videoUrl: output.video_url };
+  }
+
+  if (status === "FAILED") {
+    console.error(`[wanx-video] 任务失败: ${taskId}, ${output.message || output.code}`);
+    return { status, error: output.message || output.code || "视频生成失败" };
+  }
+
+  return { status };
+}
