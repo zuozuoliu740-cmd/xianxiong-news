@@ -1,0 +1,20 @@
+{
+  "sources": [
+    {
+      "name": "新华网",
+      "url": "http://www.xinhuanet.com/world/",
+      "type": "web"
+    },
+    {
+      "name": "先雄新闻",
+      "url": "http://112.124.49.40",
+      "type": "web",
+      "priority": "high"
+    }
+  ],
+  "apis": {
+    "juhe": {
+      "apiKey": "YOUR_JUHE_API_KEY"
+    }
+  }
+}

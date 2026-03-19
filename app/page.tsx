@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { NewsItem } from "@/lib/brave-search";
 import { getFavorites } from "@/lib/favorites";
 import { SourceDef } from "@/lib/news-scraper";
@@ -33,6 +34,9 @@ export default function Home() {
   const [antNews, setAntNews] = useState<NewsItem[]>([]);
   const [antLoading, setAntLoading] = useState(true);
   const [antFetchTime, setAntFetchTime] = useState<string>('');
+  const [localNews, setLocalNews] = useState<NewsItem[]>([]);
+  const [localLoading, setLocalLoading] = useState(true);
+  const [localFetchTime, setLocalFetchTime] = useState<string>('');
 
   const fetchNews = useCallback(
     async (cat: string, query?: string) => {
@@ -41,7 +45,7 @@ export default function Home() {
       try {
         const params = new URLSearchParams({ category: cat });
         if (query) params.set("q", query);
-        const res = await fetch(`/api/news?${params}`);
+        const res = await fetch(`/api/news?${params}`, { cache: "no-store" });
         if (!res.ok) throw new Error("Failed to fetch news");
         const data = await res.json();
         setNews(data.news || []);
@@ -63,7 +67,7 @@ export default function Home() {
   useEffect(() => {
     const fetchSources = () => {
       setSourcesLoading(true);
-      fetch("/api/news/sources")
+      fetch("/api/news/sources", { cache: "no-store" })
         .then((r) => r.json())
         .then((d) => setSources(d.sources || []))
         .catch(() => setSources([]))
@@ -81,7 +85,7 @@ export default function Home() {
     const fetchIranNews = () => {
       setIranLoading(true);
       // 使用专门的伊朗新闻API端点，包含聚合数据国际新闻补充
-      fetch("/api/news?iran=true")
+      fetch("/api/news?iran=true", { cache: "no-store" })
         .then((r) => r.json())
         .then((d) => {
           setIranNews(d.news || []);
@@ -101,7 +105,7 @@ export default function Home() {
   useEffect(() => {
     const fetchDingNews = () => {
       setDingLoading(true);
-      fetch("/api/news?ding=true")
+      fetch("/api/news?ding=true", { cache: "no-store" })
         .then((r) => r.json())
         .then((d) => {
           setDingNews(d.news || []);
@@ -121,7 +125,7 @@ export default function Home() {
   useEffect(() => {
     const fetchAntNews = () => {
       setAntLoading(true);
-      fetch("/api/news?ant=true")
+      fetch("/api/news?ant=true", { cache: "no-store" })
         .then((r) => r.json())
         .then((d) => {
           setAntNews(d.news || []);
@@ -134,6 +138,27 @@ export default function Home() {
     fetchAntNews();
     // 每2分钟刷新一次
     const interval = setInterval(fetchAntNews, 2 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // 拉取本地新闻（杭州）- 从聚合数据API获取，每2分钟自动刷新
+  useEffect(() => {
+    const fetchLocalNews = () => {
+      setLocalLoading(true);
+      // 使用专门的本地新闻API端点，从聚合数据国内新闻中过滤
+      fetch("/api/news?local=true", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((d) => {
+          setLocalNews(d.news || []);
+          setLocalFetchTime(d.fetchTime || new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }));
+        })
+        .catch(() => setLocalNews([]))
+        .finally(() => setLocalLoading(false));
+    };
+    
+    fetchLocalNews();
+    // 每2分钟刷新一次
+    const interval = setInterval(fetchLocalNews, 2 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -251,6 +276,70 @@ export default function Home() {
                 </div>
               ) : !iranLoading ? (
                 <span className="text-sm text-[#86909c]">暂无伊朗相关新闻</span>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        {/* ===== 本地新闻滚动栏（杭州） - 火山引擎风格 ===== */}
+        <div className="mb-6 overflow-hidden rounded-2xl border border-[#00b96b]/20 bg-gradient-to-r from-[#e6fff5] via-[#e0fff1] to-[#d9ffec] shadow-lg shadow-[#00b96b]/5 dark:border-[#00b96b]/30 dark:from-[#002d1f] dark:via-[#003d28] dark:to-[#004d30]">
+          <div className="flex items-center gap-4 px-5 py-4">
+            <div className="flex shrink-0 items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#00b96b] to-[#00d68f]">
+                <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-sm font-bold text-[#00b96b] dark:text-[#4ade80]">本地新闻</span>
+                {localFetchTime && !localLoading && (
+                  <span className="text-[10px] text-[#86909c]">更新于 {localFetchTime}</span>
+                )}
+              </div>
+              {localLoading && (
+                <span className="ml-2 inline-flex items-center gap-1 text-[10px] text-[#86909c]">
+                  <svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  加载中
+                </span>
+              )}
+            </div>
+            <div className="flex-1 overflow-hidden border-l border-[#00b96b]/20 pl-4 dark:border-[#00b96b]/30">
+              {localNews.length > 0 ? (
+                <div className="animate-marquee whitespace-nowrap">
+                  <span className="inline-flex items-center gap-8 text-sm text-[#1d2129] dark:text-[#e6edf3]">
+                    {localNews.map((item, i) => (
+                      <a
+                        key={item.id}
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 hover:text-[#3370ff] dark:hover:text-[#6aa0ff] transition-colors duration-200"
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${i % 2 === 0 ? 'bg-[#00b96b]' : 'bg-[#00d68f]'}`}></span>
+                        {item.title.length > 35 ? item.title.slice(0, 35) + '...' : item.title}
+                      </a>
+                    ))}
+                    {/* 重复一遍实现无缝滚动 */}
+                    {localNews.map((item, i) => (
+                      <a
+                        key={`dup-${item.id}`}
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 hover:text-[#3370ff] dark:hover:text-[#6aa0ff] transition-colors duration-200"
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${i % 2 === 0 ? 'bg-[#00b96b]' : 'bg-[#00d68f]'}`}></span>
+                        {item.title.length > 35 ? item.title.slice(0, 35) + '...' : item.title}
+                      </a>
+                    ))}
+                  </span>
+                </div>
+              ) : !localLoading ? (
+                <span className="text-sm text-[#86909c]">暂无本地新闻</span>
               ) : null}
             </div>
           </div>
@@ -376,6 +465,89 @@ export default function Home() {
           </div>
         </div>
 
+        {/* ===== 先雄AI实验室 ===== */}
+        <section className="mb-8">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-[#7c3aed] to-[#ec4899] shadow-lg shadow-[#7c3aed]/20">
+              <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+            </div>
+            <h2 className="text-base font-semibold text-[#1d2129] dark:text-[#e6edf3]">先雄AI实验室</h2>
+            <span className="rounded-full bg-gradient-to-r from-[#7c3aed]/10 to-[#ec4899]/10 px-2.5 py-0.5 text-[10px] font-semibold text-[#7c3aed] dark:from-[#7c3aed]/20 dark:to-[#ec4899]/20 dark:text-[#a78bfa]">BETA</span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            {/* AI爆品替换 */}
+            <Link href="/ai-lab/product-swap" className="group relative overflow-hidden rounded-2xl border border-[#7c3aed]/20 bg-gradient-to-br from-[#faf5ff] via-[#f5f0ff] to-[#ede9fe] p-6 shadow-[0_2px_12px_0_rgba(124,58,237,0.08)] transition-all duration-300 hover:shadow-[0_12px_32px_-4px_rgba(124,58,237,0.2)] hover:border-[#7c3aed]/40 dark:border-[#7c3aed]/30 dark:from-[#1a0f2e] dark:via-[#1e1340] dark:to-[#251850] dark:hover:shadow-[0_12px_32px_-4px_rgba(124,58,237,0.3)] card-hover cursor-pointer">
+              {/* 背景装饰 */}
+              <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-gradient-to-br from-[#7c3aed]/10 to-[#ec4899]/10 blur-2xl transition-all duration-500 group-hover:scale-150 group-hover:from-[#7c3aed]/20 group-hover:to-[#ec4899]/20" />
+              <div className="absolute -bottom-4 -left-4 h-24 w-24 rounded-full bg-gradient-to-tr from-[#3370ff]/10 to-[#7c3aed]/10 blur-xl" />
+              
+              <div className="relative">
+                <div className="mb-4 flex items-center gap-4">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#7c3aed] to-[#a855f7] shadow-lg shadow-[#7c3aed]/30 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3">
+                    <svg className="h-7 w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-[#1d2129] dark:text-[#e6edf3]">AI爆品替换</h3>
+                    <p className="text-xs text-[#86909c] dark:text-[#8b949e]">爆品替换Agent</p>
+                  </div>
+                </div>
+                <p className="mb-5 text-sm leading-relaxed text-[#4e5969] dark:text-[#8b949e]">
+                  图生视频，爆品替换，快速上线各大视频平台。
+                </p>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center rounded-lg bg-[#7c3aed]/10 px-2.5 py-1 text-[11px] font-medium text-[#7c3aed] dark:bg-[#7c3aed]/20 dark:text-[#a78bfa]">图片处理</span>
+                    <span className="inline-flex items-center rounded-lg bg-[#ec4899]/10 px-2.5 py-1 text-[11px] font-medium text-[#ec4899] dark:bg-[#ec4899]/20 dark:text-[#f472b6]">电商场景</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-sm font-medium text-[#7c3aed] transition-all group-hover:gap-3 dark:text-[#a78bfa]">
+                    立即体验
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                  </div>
+                </div>
+              </div>
+            </Link>
+
+            {/* AI图像生成 */}
+            <div className="group relative overflow-hidden rounded-2xl border border-[#ec4899]/20 bg-gradient-to-br from-[#fdf2f8] via-[#fce7f3] to-[#fbcfe8]/30 p-6 shadow-[0_2px_12px_0_rgba(236,72,153,0.08)] transition-all duration-300 hover:shadow-[0_12px_32px_-4px_rgba(236,72,153,0.2)] hover:border-[#ec4899]/40 dark:border-[#ec4899]/30 dark:from-[#2d0f24] dark:via-[#3d1530] dark:to-[#4d1a3c] dark:hover:shadow-[0_12px_32px_-4px_rgba(236,72,153,0.3)] card-hover cursor-pointer">
+              {/* 背景装饰 */}
+              <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-gradient-to-br from-[#ec4899]/10 to-[#f97316]/10 blur-2xl transition-all duration-500 group-hover:scale-150 group-hover:from-[#ec4899]/20 group-hover:to-[#f97316]/20" />
+              <div className="absolute -bottom-4 -left-4 h-24 w-24 rounded-full bg-gradient-to-tr from-[#7c3aed]/10 to-[#ec4899]/10 blur-xl" />
+              
+              <div className="relative">
+                <div className="mb-4 flex items-center gap-4">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#ec4899] to-[#f97316] shadow-lg shadow-[#ec4899]/30 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3">
+                    <svg className="h-7 w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-[#1d2129] dark:text-[#e6edf3]">AI图像生成</h3>
+                    <p className="text-xs text-[#86909c] dark:text-[#8b949e]">文字描述一键生成高质量图片</p>
+                  </div>
+                </div>
+                <p className="mb-5 text-sm leading-relaxed text-[#4e5969] dark:text-[#8b949e]">
+                  输入文字描述，AI即时生成创意图片。支持多种风格：写实、插画、3D渲染、水彩等，满足各种设计需求。
+                </p>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center rounded-lg bg-[#ec4899]/10 px-2.5 py-1 text-[11px] font-medium text-[#ec4899] dark:bg-[#ec4899]/20 dark:text-[#f472b6]">文生图</span>
+                    <span className="inline-flex items-center rounded-lg bg-[#f97316]/10 px-2.5 py-1 text-[11px] font-medium text-[#f97316] dark:bg-[#f97316]/20 dark:text-[#fb923c]">多风格</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-sm font-medium text-[#ec4899] transition-all group-hover:gap-3 dark:text-[#f472b6]">
+                    即将上线
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* ===== 各源实时内容 ===== */}
         {!showFavorites && (
           <section className="mb-8">
@@ -396,7 +568,7 @@ export default function Home() {
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {(sources.length > 0 ? sources : Array(6).fill(null)).map((src, idx) => {
+              {(sources.length > 0 ? sources.filter(s => s.items && s.items.length > 0) : Array(6).fill(null)).map((src, idx) => {
                 const isLoading = sourcesLoading && !src;
                 if (isLoading) {
                   return (
@@ -445,12 +617,80 @@ export default function Home() {
                         rel="noopener noreferrer"
                         className="shrink-0 rounded-lg bg-gradient-to-r from-[#3370ff] to-[#7c3aed] px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-all hover:shadow-md hover:shadow-[#3370ff]/20"
                       >
-                        进入官网
+                        进入正能量
                       </a>
                     </div>
 
-                    {/* 新闻列表 */}
-                    {s.ok && s.items.length > 0 ? (
+                    {/* 新闻列表 - 先雄的正能量入口特殊展示 */}
+                    {s.id === "juhe" && s.ok && s.items.length > 0 ? (
+                      <div className="border-t border-[#e5e6eb]/50 p-4 dark:border-[#30363d]/50">
+                        {/* 三板块布局 */}
+                        <div className="grid grid-cols-1 gap-4">
+                          {/* 产品负责人板块 */}
+                          <div className="rounded-xl bg-gradient-to-br from-[#1a365d] via-[#1e3a5f] to-[#234b74] p-4">
+                            <div className="mb-3 flex items-center gap-2">
+                              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[#3370ff]/20 text-sm font-bold text-[#3370ff]">1</span>
+                              <span className="text-sm font-semibold text-white">产品负责人</span>
+                            </div>
+                            <div className="space-y-2">
+                              <a href="http://112.124.49.40/experience" target="_blank" rel="noopener noreferrer" className="group flex items-center gap-3 rounded-xl bg-[#0d2137]/60 p-3 transition-all hover:bg-[#0d2137]">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#ff6b6b] to-[#ee5a5a] text-lg">🚗</div>
+                                <div className="flex-1">
+                                  <div className="text-sm font-medium text-white">吉利智能座舱</div>
+                                </div>
+                                <svg className="h-4 w-4 text-[#4a5568] transition-colors group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                              </a>
+                              <a href="http://112.124.49.40/experience" target="_blank" rel="noopener noreferrer" className="group flex items-center gap-3 rounded-xl bg-[#0d2137]/60 p-3 transition-all hover:bg-[#0d2137]">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#4facfe] to-[#00f2fe] text-lg">💳</div>
+                                <div className="flex-1">
+                                  <div className="text-sm font-medium text-white">支付宝</div>
+                                  <div className="text-xs text-[#8b9dc3]">小程序</div>
+                                </div>
+                                <svg className="h-4 w-4 text-[#4a5568] transition-colors group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                              </a>
+                              <a href="http://112.124.49.40/experience" target="_blank" rel="noopener noreferrer" className="group flex items-center gap-3 rounded-xl bg-[#0d2137]/60 p-3 transition-all hover:bg-[#0d2137]">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#4facfe] to-[#00f2fe] text-lg">📱</div>
+                                <div className="flex-1">
+                                  <div className="text-sm font-medium text-white">支付宝</div>
+                                  <div className="text-xs text-[#8b9dc3]">碰一下</div>
+                                </div>
+                                <svg className="h-4 w-4 text-[#4a5568] transition-colors group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                              </a>
+                            </div>
+                          </div>
+
+                          {/* TO C 业务负责人板块 */}
+                          <div className="rounded-xl bg-gradient-to-br from-[#2d1b4e] via-[#3d1f5e] to-[#4d2370] p-4">
+                            <div className="mb-3 flex items-center gap-2">
+                              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[#7c3aed]/20 text-sm font-bold text-[#a855f7]">2</span>
+                              <span className="text-sm font-semibold text-white">TO C 业务负责人</span>
+                            </div>
+                            <a href="http://112.124.49.40/experience" target="_blank" rel="noopener noreferrer" className="group flex items-center gap-3 rounded-xl bg-[#1a0f2e]/60 p-3 transition-all hover:bg-[#1a0f2e]">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#fbbf24] to-[#f59e0b] text-lg">💰</div>
+                              <div className="flex-1">
+                                <div className="text-sm font-medium text-white">澳门 MPay 业务</div>
+                              </div>
+                              <svg className="h-4 w-4 text-[#4a5568] transition-colors group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                            </a>
+                          </div>
+
+                          {/* TO B 业务板块 */}
+                          <div className="rounded-xl bg-gradient-to-br from-[#3d2800] via-[#4d3000] to-[#5d3800] p-4">
+                            <div className="mb-3 flex items-center gap-2">
+                              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-[#ff7d00]/20 text-sm font-bold text-[#ff7d00]">3</span>
+                              <span className="text-sm font-semibold text-white">TO B 业务</span>
+                            </div>
+                            <a href="http://112.124.49.40/experience" target="_blank" rel="noopener noreferrer" className="group flex items-center gap-3 rounded-xl bg-[#2d1f00]/60 p-3 transition-all hover:bg-[#2d1f00]">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#ff7d00] to-[#f53f3f] text-lg">🎯</div>
+                              <div className="flex-1">
+                                <div className="text-sm font-medium text-white">钉钉商业伙伴运营</div>
+                              </div>
+                              <svg className="h-4 w-4 text-[#4a5568] transition-colors group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    ) : s.ok && s.items.length > 0 ? (
                       <div className="border-t border-[#e5e6eb]/50 p-4 dark:border-[#30363d]/50">
                         <div className="grid gap-3">
                           {s.items.slice(0, 3).map((item, i) => (

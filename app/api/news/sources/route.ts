@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getNewsBySource, NEWS_SOURCES } from "@/lib/news-scraper";
 
+// 强制动态渲染，禁止 Next.js 静态缓存
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET() {
   const data = await getNewsBySource(4, true);
 
@@ -28,9 +32,8 @@ export async function GET() {
     };
   });
 
-  return NextResponse.json({
-    sources,
-    fetchTime,
-    timestamp: now.toISOString(),
-  });
+  return NextResponse.json(
+    { sources, fetchTime, timestamp: now.toISOString() },
+    { headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" } }
+  );
 }

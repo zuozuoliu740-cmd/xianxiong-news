@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clearSourceCache } from "@/lib/news-scraper";
 
+// 强制动态渲染，禁止 Next.js 静态缓存
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const NO_CACHE_HEADERS = { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" };
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -13,12 +19,12 @@ export async function POST(request: NextRequest) {
       success: true,
       message: source ? `已清除 ${source} 的缓存` : "已清除所有缓存",
       timestamp: new Date().toISOString(),
-    });
+    }, { headers: NO_CACHE_HEADERS });
   } catch (error) {
     console.error("Cache refresh error:", error);
     return NextResponse.json(
       { success: false, error: "Failed to refresh cache" },
-      { status: 500 }
+      { status: 500, headers: NO_CACHE_HEADERS }
     );
   }
 }
@@ -31,12 +37,12 @@ export async function GET() {
       success: true,
       message: "已清除所有缓存",
       timestamp: new Date().toISOString(),
-    });
+    }, { headers: NO_CACHE_HEADERS });
   } catch (error) {
     console.error("Cache refresh error:", error);
     return NextResponse.json(
       { success: false, error: "Failed to refresh cache" },
-      { status: 500 }
+      { status: 500, headers: NO_CACHE_HEADERS }
     );
   }
 }

@@ -22,12 +22,15 @@ function setCache(key: string, data: NewsItem[], ttl: number = CACHE_TTL) {
   cache.set(key, { data, expireAt: Date.now() + ttl });
 }
 
-// 清除指定源的缓存
+// 清除缓存（清除所有 by-source 和 scrape 缓存）
 export function clearSourceCache(sourceId?: string) {
   if (sourceId) {
-    cache.delete(`by-source:20`);
-    cache.delete(`by-source:15`);
-    cache.delete(`by-source:5`);
+    // 清除所有 by-source 缓存（不同 limit 都清除）
+    for (const key of cache.keys()) {
+      if (key.startsWith("by-source:") || key.startsWith("scrape:")) {
+        cache.delete(key);
+      }
+    }
   } else {
     cache.clear();
   }
@@ -402,7 +405,13 @@ export const NEWS_SOURCES: SourceDef[] = [
   { id: "sspai",    label: "少数派",       desc: "中文科技",   icon: "📱", url: "https://sspai.com",              color: "from-purple-50 to-purple-100 border-purple-200", textColor: "text-purple-700", cat: "tech" },
   { id: "ifanr",    label: "爱范儿",       desc: "科技生活",   icon: "❤️",  url: "https://www.ifanr.com",          color: "from-pink-50 to-pink-100 border-pink-200",      textColor: "text-pink-700",   cat: "tech" },
   { id: "leiphone", label: "雷锋网",       desc: "智能创新",   icon: "⚡️", url: "https://www.leiphone.com",        color: "from-yellow-50 to-yellow-100 border-yellow-200", textColor: "text-yellow-700", cat: "tech" },
-  { id: "juhe",     label: "聚合数据",     desc: "头条新闻",   icon: "📰", url: "https://www.juhe.cn",             color: "from-orange-50 to-orange-100 border-orange-200", textColor: "text-orange-700", cat: "all" },
+  { id: "juhe",     label: "先雄的正能量入口",     desc: "头条新闻",   icon: "📰", url: "http://112.124.49.40/experience",             color: "from-orange-50 to-orange-100 border-orange-200", textColor: "text-orange-700", cat: "all" },
+  
+  // OpenClaw 国际新闻源
+  { id: "bbc",        label: "BBC",           desc: "国际新闻",   icon: "🇬🇧", url: "https://www.bbc.com/news",       color: "from-red-50 to-red-100 border-red-200",        textColor: "text-red-700",    cat: "all" },
+  { id: "reuters",    label: "Reuters",       desc: "路透社",     icon: "📡", url: "https://www.reuters.com",        color: "from-orange-50 to-orange-100 border-orange-200", textColor: "text-orange-700", cat: "all" },
+  { id: "npr",        label: "NPR",           desc: "美国视角",   icon: "🇺🇸", url: "https://www.npr.org",            color: "from-blue-50 to-blue-100 border-blue-200",      textColor: "text-blue-700",   cat: "all" },
+  { id: "aljazeera",  label: "Al Jazeera",    desc: "全球南方视角", icon: "🌍", url: "https://www.aljazeera.com",     color: "from-emerald-50 to-emerald-100 border-emerald-200", textColor: "text-emerald-700", cat: "all" },
 ];
 
 // 单个来源抓取配置（同 SCRAPER_SOURCES 但以 sourceId 为 key）
@@ -561,9 +570,11 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
     url: "https://www.people.com.cn/rss/politics.xml",
     selector: "item",
     parser: ($, el) => {
-      const title = $(el).find("title").first().text().trim();
+      const rawTitle = $(el).find("title").first().text().trim();
+      const title = rawTitle.replace(/^<!\[CDATA\[|\]\]>$/gi, "").trim();
       const link = $(el).find("link").first().text().trim() || $(el).find("guid").first().text().trim();
-      const desc = $(el).find("description").first().text().replace(/<[^>]*>/g, "").trim().slice(0, 100);
+      const rawDesc = $(el).find("description").first().text();
+      const desc = rawDesc.replace(/<[^>]*>/g, "").replace(/^<!\[CDATA\[|\]\]>$/gi, "").trim().slice(0, 100);
       const pubDate = $(el).find("pubDate").first().text().trim();
       if (!title || title.length < 5) return null;
       return { id: `people-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "来自人民网的时政资讯", url: link || "https://www.people.com.cn", source: "人民网", publishedAt: pubDate || new Date().toISOString(), category: "politics" };
@@ -775,6 +786,55 @@ const SOURCE_CONFIGS: Record<string, { url: string; selector: string; parser: ($
       return { id: `ant6-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc || "蚂蚁集团新闻", url: fullUrl, source: "蚂蚁集团官网", publishedAt: pubDate || new Date().toISOString(), category: "ant" };
     },
   },
+  // OpenClaw 国际新闻源 RSS 配置
+  "bbc": {
+    url: "https://feeds.bbci.co.uk/news/world/rss.xml",
+    selector: "item",
+    parser: ($, el) => {
+      const title = $(el).find("title").first().text().trim();
+      const link = $(el).find("link").first().text().trim() || $(el).find("guid").first().text().trim();
+      const desc = $(el).find("description").first().text().replace(/<[^>]*>/g, "").trim().slice(0, 150);
+      const pubDate = $(el).find("pubDate").first().text().trim();
+      if (!title || title.length < 5) return null;
+      return { id: `bbc-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://www.bbc.com/news", source: "BBC", publishedAt: pubDate || new Date().toISOString(), category: "all" };
+    },
+  },
+  "reuters": {
+    url: "https://www.reutersagency.com/feed/?best-regions=world&post_type=best",
+    selector: "item",
+    parser: ($, el) => {
+      const title = $(el).find("title").first().text().trim();
+      const link = $(el).find("link").first().text().trim() || $(el).find("guid").first().text().trim();
+      const desc = $(el).find("description").first().text().replace(/<[^>]*>/g, "").trim().slice(0, 150);
+      const pubDate = $(el).find("pubDate").first().text().trim();
+      if (!title || title.length < 5) return null;
+      return { id: `reuters-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://www.reuters.com", source: "Reuters", publishedAt: pubDate || new Date().toISOString(), category: "all" };
+    },
+  },
+  "npr": {
+    url: "https://feeds.npr.org/1001/rss.xml",
+    selector: "item",
+    parser: ($, el) => {
+      const title = $(el).find("title").first().text().trim();
+      const link = $(el).find("link").first().text().trim() || $(el).find("guid").first().text().trim();
+      const desc = $(el).find("description").first().text().replace(/<[^>]*>/g, "").trim().slice(0, 150);
+      const pubDate = $(el).find("pubDate").first().text().trim();
+      if (!title || title.length < 5) return null;
+      return { id: `npr-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://www.npr.org", source: "NPR", publishedAt: pubDate || new Date().toISOString(), category: "all" };
+    },
+  },
+  "aljazeera": {
+    url: "https://www.aljazeera.com/xml/rss/all.xml",
+    selector: "item",
+    parser: ($, el) => {
+      const title = $(el).find("title").first().text().trim();
+      const link = $(el).find("link").first().text().trim() || $(el).find("guid").first().text().trim();
+      const desc = $(el).find("description").first().text().replace(/<[^>]*>/g, "").trim().slice(0, 150);
+      const pubDate = $(el).find("pubDate").first().text().trim();
+      if (!title || title.length < 5) return null;
+      return { id: `aljazeera-s-${Math.random().toString(36).substr(2,9)}`, title, description: desc, url: link || "https://www.aljazeera.com", source: "Al Jazeera", publishedAt: pubDate || new Date().toISOString(), category: "all" };
+    },
+  },
 };
 
 // ---- 聚合数据 API 抓取 ----
@@ -838,7 +898,9 @@ export async function getNewsBySource(limit: number = 4, useShortCache: boolean 
       if (!cfg) return { sourceId: src.id, items: [], ok: false };
       try {
         const html = await scrapeUrl(cfg.url);
-        const $ = cheerio.load(html);
+        // 清理 CDATA 包裹，避免 RSS 标题/描述中残留 <![CDATA[...]]> 标签
+        const cleanedHtml = html.replace(/<!\[CDATA\[/g, "").replace(/\]\]>/g, "");
+        const $ = cheerio.load(cleanedHtml);
         const items: NewsItem[] = [];
         $(cfg.selector).each((_, el) => {
           if (items.length >= limit) return false as any;
@@ -886,19 +948,19 @@ export async function getNewsBySource(limit: number = 4, useShortCache: boolean 
     r.status === "fulfilled" ? r.value : { sourceId: NEWS_SOURCES[i].id, items: [], ok: false }
   );
 
-  // 获取聚合数据新闻并合并
-  try {
-    const juheNews = await fetchJuheNews();
-    if (juheNews.length > 0) {
-      data.push({
-        sourceId: "juhe",
-        items: juheNews.slice(0, limit),
-        ok: true,
-      });
-    }
-  } catch (error) {
-    console.error("Failed to fetch Juhe news in getNewsBySource:", error);
-  }
+  // 先雄的正能量入口 - 只展示工作经历
+  const experienceItems: NewsItem[] = [
+    { id: "exp-1", title: "产品负责人 - 吉利智能座舱", description: "负责智能座舱产品设计", url: "http://112.124.49.40/experience", source: "先雄的正能量入口", publishedAt: new Date().toISOString(), category: "all" },
+    { id: "exp-2", title: "产品负责人 - 支付宝小程序", description: "负责支付宝小程序产品", url: "http://112.124.49.40/experience", source: "先雄的正能量入口", publishedAt: new Date().toISOString(), category: "all" },
+    { id: "exp-3", title: "产品负责人 - 支付宝碰一下", description: "负责支付宝碰一下产品", url: "http://112.124.49.40/experience", source: "先雄的正能量入口", publishedAt: new Date().toISOString(), category: "all" },
+    { id: "exp-4", title: "TO C 业务负责人 - 澳门 MPay", description: "负责澳门MPay业务", url: "http://112.124.49.40/experience", source: "先雄的正能量入口", publishedAt: new Date().toISOString(), category: "all" },
+    { id: "exp-5", title: "TO B 业务 - 钉钉商业伙伴运营", description: "负责钉钉商业伙伴运营", url: "http://112.124.49.40/experience", source: "先雄的正能量入口", publishedAt: new Date().toISOString(), category: "all" },
+  ];
+  data.push({
+    sourceId: "juhe",
+    items: experienceItems,
+    ok: true,
+  });
 
   // 写缓存（flat 压平存）
   const flat = data.flatMap(d => d.items);

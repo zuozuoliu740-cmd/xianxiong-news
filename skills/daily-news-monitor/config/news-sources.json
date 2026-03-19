@@ -1,0 +1,36 @@
+{
+  "sources": [
+    {
+      "name": "新华网国际",
+      "url": "https://www.xinhuanet.com/world/",
+      "emoji": "🌍",
+      "priority": "high"
+    },
+    {
+      "name": "央视新闻国际",
+      "url": "https://news.cctv.com/international/",
+      "emoji": "📺",
+      "priority": "high"
+    },
+    {
+      "name": "路透社中东",
+      "url": "https://www.reuters.com/world/middle-east/",
+      "emoji": "🏛️",
+      "priority": "medium"
+    },
+    {
+      "name": "联合早报",
+      "url": "https://www.zaobao.com.sg/realtime/china",
+      "emoji": "📰",
+      "priority": "medium"
+    }
+  ],
+  "checkFrequency": "1-2 times daily",
+  "quietHours": {
+    "start": "23:00",
+    "end": "08:00",
+    "pushUrgentOnly": true
+  },
+  "sharedHistoryPath": "~/.openclaw/shared/news-history.md",
+  "channels": ["dingtalk-connector", "webchat"]
+}
