@@ -10,6 +10,8 @@ interface UploadedFile {
   file: File;
   preview: string;
   id: string;
+  serverUrl?: string; // 上传到服务器后的URL
+  uploading?: boolean;
 }
 
 interface HistoryVideo {
@@ -21,15 +23,16 @@ interface HistoryVideo {
   status: "completed" | "processing" | "failed";
   hasEnglish: boolean;
   desc: string;
-  gradient: string;
+  videoUrl?: string;
+  imageUrls?: string[];
 }
 
-const mockHistory: HistoryVideo[] = [
-  { id: "v1", title: "夏季连衣裙推广视频", type: "clothing", createdAt: "2026-03-19 14:32", duration: "0:28", status: "completed", hasEnglish: true, desc: "时尚连衣裙替换展示，英文配音版本", gradient: "from-[#7c3aed] to-[#ec4899]" },
-  { id: "v2", title: "智能手表产品视频", type: "product", createdAt: "2026-03-18 09:15", duration: "0:35", status: "completed", hasEnglish: false, desc: "商品替换+图生视频，多角度展示", gradient: "from-[#3370ff] to-[#06b6d4]" },
-  { id: "v3", title: "运动鞋模特展示", type: "model", createdAt: "2026-03-17 16:48", duration: "0:22", status: "completed", hasEnglish: true, desc: "模特替换+服饰展示，双语版本", gradient: "from-[#f97316] to-[#ec4899]" },
-  { id: "v4", title: "护肤品套装推广", type: "product", createdAt: "2026-03-16 11:20", duration: "0:41", status: "completed", hasEnglish: false, desc: "商品图生成推广视频，自动文案", gradient: "from-[#7c3aed] to-[#3370ff]" },
-  { id: "v5", title: "秋冬外套新品发布", type: "clothing", createdAt: "2026-03-15 20:05", duration: "0:30", status: "processing", hasEnglish: false, desc: "服饰替换生成中...", gradient: "from-[#06b6d4] to-[#7c3aed]" },
+const GRADIENTS = [
+  "from-[#7c3aed] to-[#ec4899]",
+  "from-[#3370ff] to-[#06b6d4]",
+  "from-[#f97316] to-[#ec4899]",
+  "from-[#7c3aed] to-[#3370ff]",
+  "from-[#06b6d4] to-[#7c3aed]",
 ];
 
 export default function ProductSwapPage() {
@@ -46,30 +49,71 @@ export default function ProductSwapPage() {
   const [isGeneratingEnDesc, setIsGeneratingEnDesc] = useState(false);
   const [showMyVideos, setShowMyVideos] = useState(false);
   const [editingVideoId, setEditingVideoId] = useState<string | null>(null);
+  const [historyVideos, setHistoryVideos] = useState<HistoryVideo[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const [resultVideoUrl, setResultVideoUrl] = useState<string | null>(null);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [uploadedVideoUrl, setUploadedVideoUrl] = useState<string | null>(null);
+  const [uploadedImageUrls, setUploadedImageUrls] = useState<string[]>([]);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Auto-start generating animation when entering generating step
+  // 加载历史记录
+  const fetchHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch("/api/ai-lab/history");
+      const data = await res.json();
+      if (data.success) setHistoryVideos(data.history || []);
+    } catch { /* ignore */ }
+    setHistoryLoading(false);
+  }, []);
+
+  useEffect(() => { fetchHistory(); }, [fetchHistory]);
+
+  // 轮询视频生成进度
   useEffect(() => {
-    if (step === "generating" && progress < 100) {
+    if (step === "generating" && taskId) {
       if (timerRef.current) clearInterval(timerRef.current);
-      timerRef.current = setInterval(() => {
-        setProgress((p) => {
-          if (p >= 100) {
+      timerRef.current = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/ai-lab/generate-video/status?taskId=${taskId}`);
+          const data = await res.json();
+          setProgress(data.progress || 0);
+          if (data.status === "completed") {
             if (timerRef.current) clearInterval(timerRef.current);
             setResultReady(true);
+            setResultVideoUrl(data.resultUrl || null);
             setStep("preview");
-            return 100;
+            // 保存历史记录
+            const typeLabels = { product: "商品", clothing: "服饰", model: "模特" };
+            fetch("/api/ai-lab/history", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                title: `${typeLabels[swapType]}推广视频`,
+                type: swapType,
+                hasEnglish: needEnglish,
+                desc: productDesc.slice(0, 50),
+                videoUrl: data.resultUrl,
+                imageUrls: uploadedImageUrls,
+                originalVideoUrl: uploadedVideoUrl,
+              }),
+            }).then(() => fetchHistory());
+          } else if (data.status === "failed") {
+            if (timerRef.current) clearInterval(timerRef.current);
+            setApiError(data.error || "视频生成失败");
+            setStep("details");
           }
-          return p + Math.random() * 8 + 2;
-        });
-      }, 300);
+        } catch { /* retry on next tick */ }
+      }, 1500);
     }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [step]);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [step, taskId]);
 
   // Reset progress when leaving generating step manually
   const handleStepClick = (s: Step) => {
@@ -87,22 +131,60 @@ export default function ProductSwapPage() {
     { id: "model", label: "模特替换", icon: "🧑", desc: "替换视频中的模特面部" },
   ];
 
-  const handleVideoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVideoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const preview = URL.createObjectURL(file);
-    setVideo({ file, preview, id: crypto.randomUUID() });
+    const id = crypto.randomUUID();
+    setVideo({ file, preview, id, uploading: true });
+    setUploadingVideo(true);
+    setApiError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("type", "video");
+      const res = await fetch("/api/ai-lab/upload", { method: "POST", body: fd });
+      const data = await res.json();
+      if (data.success) {
+        setUploadedVideoUrl(data.url);
+        setVideo({ file, preview, id, serverUrl: data.url });
+      } else {
+        setApiError(data.error || "视频上传失败");
+      }
+    } catch (err: any) {
+      setApiError("视频上传失败: " + (err.message || "网络错误"));
+    }
+    setUploadingVideo(false);
   }, []);
 
-  const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     const newImages = files.slice(0, 5 - productImages.length).map((file) => ({
       file,
       preview: URL.createObjectURL(file),
       id: crypto.randomUUID(),
+      uploading: true,
     }));
     setProductImages((prev) => [...prev, ...newImages].slice(0, 5));
     if (imageInputRef.current) imageInputRef.current.value = "";
+    setUploadingImages(true);
+    setApiError(null);
+    const urls: string[] = [];
+    for (const img of newImages) {
+      try {
+        const fd = new FormData();
+        fd.append("file", img.file);
+        fd.append("type", "image");
+        const res = await fetch("/api/ai-lab/upload", { method: "POST", body: fd });
+        const data = await res.json();
+        if (data.success) {
+          urls.push(data.url);
+          setProductImages((prev) => prev.map(p => p.id === img.id ? { ...p, serverUrl: data.url, uploading: false } : p));
+        }
+      } catch { /* ignore single failure */ }
+    }
+    setUploadedImageUrls((prev) => [...prev, ...urls]);
+    setUploadingImages(false);
   }, [productImages.length]);
 
   const removeImage = (id: string) => {
@@ -126,27 +208,83 @@ export default function ProductSwapPage() {
     if (!productDesc) handleGenerateDesc();
   };
 
-  const handleGenerateDesc = () => {
+  const handleGenerateDesc = async () => {
     setIsGeneratingDesc(true);
-    setTimeout(() => {
-      const type = swapTypes.find(t => t.id === swapType);
-      setProductDesc(`【${type?.label || '商品'}推荐】\n\n这款精选商品采用高品质材料打造，细节精致，质感出众。无论是日常穿搭还是特殊场合，都能轻松驾驭。\n\n✨ 核心亮点：\n• 优质面料，亲肤透气\n• 时尚设计，百搭实用\n• 精工制作，品质保证\n\n🔥 限时特惠，库存有限，喜欢就不要错过！`);
-      setIsGeneratingDesc(false);
-    }, 1500);
+    setApiError(null);
+    try {
+      const res = await fetch("/api/ai-lab/generate-desc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          swapType,
+          imageCount: productImages.length,
+          hasVideo: !!video,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProductDesc(data.desc);
+      } else {
+        setApiError(data.error || "文案生成失败");
+      }
+    } catch (err: any) {
+      setApiError("文案生成失败: " + (err.message || "网络错误"));
+    }
+    setIsGeneratingDesc(false);
   };
 
-  const handleGenerateEnDesc = () => {
+  const handleGenerateEnDesc = async () => {
     setIsGeneratingEnDesc(true);
-    setTimeout(() => {
-      setEnglishDesc(`【Featured Product】\n\nCrafted with premium materials, featuring exquisite details and outstanding quality. Perfect for everyday use or special occasions.\n\n✨ Key Highlights:\n• Premium fabric, soft and breathable\n• Trendy design, versatile styling\n• Fine craftsmanship, quality guaranteed\n\n🔥 Limited-time offer — grab yours now!`);
-      setIsGeneratingEnDesc(false);
-    }, 2000);
+    setApiError(null);
+    try {
+      const res = await fetch("/api/ai-lab/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: productDesc }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEnglishDesc(data.translation);
+      } else {
+        setApiError(data.error || "翻译失败");
+      }
+    } catch (err: any) {
+      setApiError("翻译失败: " + (err.message || "网络错误"));
+    }
+    setIsGeneratingEnDesc(false);
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (timerRef.current) clearInterval(timerRef.current);
     setStep("generating");
     setProgress(0);
+    setResultReady(false);
+    setResultVideoUrl(null);
+    setApiError(null);
+    try {
+      const res = await fetch("/api/ai-lab/generate-video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoUrl: uploadedVideoUrl,
+          imageUrls: uploadedImageUrls,
+          desc: productDesc,
+          swapType,
+          needEnglish,
+          englishDesc,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTaskId(data.taskId);
+      } else {
+        setApiError(data.error || "创建视频任务失败");
+        setStep("details");
+      }
+    } catch (err: any) {
+      setApiError("创建视频任务失败: " + (err.message || "网络错误"));
+      setStep("details");
+    }
   };
 
   const handleReset = () => {
@@ -160,6 +298,11 @@ export default function ProductSwapPage() {
     setProductDesc("");
     setEnglishDesc("");
     setNeedEnglish(false);
+    setTaskId(null);
+    setResultVideoUrl(null);
+    setUploadedVideoUrl(null);
+    setUploadedImageUrls([]);
+    setApiError(null);
   };
 
   return (
@@ -212,6 +355,17 @@ export default function ProductSwapPage() {
       </header>
 
       <div className="mx-auto max-w-6xl px-5 py-6">
+        {/* ===== API Error Toast ===== */}
+        {apiError && (
+          <div className="mb-4 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
+            <svg className="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <span className="flex-1">{apiError}</span>
+            <button onClick={() => setApiError(null)} className="flex-shrink-0 text-red-400 hover:text-red-600 dark:hover:text-red-200">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+        )}
+
         {/* ===== My Videos Panel ===== */}
         {showMyVideos && (
           <div className="space-y-6">
@@ -219,7 +373,7 @@ export default function ProductSwapPage() {
               <h2 className="flex items-center gap-2 text-lg font-bold text-[#1d2129] dark:text-[#e6edf3]">
                 <svg className="h-5 w-5 text-[#7c3aed]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
                 我的视频
-                <span className="text-sm font-normal text-[#86909c]">({mockHistory.length}个)</span>
+                <span className="text-sm font-normal text-[#86909c]">({historyVideos.length}个)</span>
               </h2>
               <button
                 onClick={() => { setShowMyVideos(false); handleReset(); }}
@@ -232,10 +386,21 @@ export default function ProductSwapPage() {
 
             {/* Video Grid */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {mockHistory.map((v) => (
+              {historyLoading ? (
+              <div className="col-span-full flex items-center justify-center py-16">
+                <svg className="h-6 w-6 animate-spin text-[#7c3aed]" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                <span className="ml-2 text-sm text-[#86909c]">加载中...</span>
+              </div>
+            ) : historyVideos.length === 0 ? (
+              <div className="col-span-full flex flex-col items-center justify-center py-16 text-[#86909c]">
+                <svg className="mb-3 h-12 w-12 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                <p className="text-sm">暂无视频记录</p>
+                <p className="mt-1 text-xs">点击右上角"新建视频"开始创作</p>
+              </div>
+            ) : historyVideos.map((v, vi) => (
                 <div key={v.id} className="group overflow-hidden rounded-2xl border border-[#e5e6eb]/50 bg-white shadow-[0_2px_12px_0_rgba(0,0,0,0.04)] transition-all hover:shadow-lg hover:-translate-y-0.5 dark:border-[#30363d]/50 dark:bg-[#161b22]">
                   {/* Thumbnail */}
-                  <div className={`relative flex h-44 items-center justify-center bg-gradient-to-br ${v.gradient}`}>
+                  <div className={`relative flex h-44 items-center justify-center bg-gradient-to-br ${GRADIENTS[vi % GRADIENTS.length]}`}>
                     <svg className="h-12 w-12 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                     <div className="absolute inset-0 flex items-center justify-center bg-black/10 opacity-0 transition-opacity group-hover:opacity-100">
                       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg"><svg className="ml-0.5 h-5 w-5 text-[#7c3aed]" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg></div>
@@ -339,6 +504,14 @@ export default function ProductSwapPage() {
                   <div className="absolute bottom-2 left-2 rounded-lg bg-black/60 px-2.5 py-1 text-xs text-white backdrop-blur-sm">
                     {video.file.name}
                   </div>
+                  {uploadingVideo && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                      <div className="flex items-center gap-2 rounded-lg bg-black/70 px-3 py-2 text-xs text-white">
+                        <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                        上传中...
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               <input ref={videoInputRef} type="file" accept="video/mp4,video/quicktime" className="hidden" onChange={handleVideoUpload} />
@@ -358,6 +531,11 @@ export default function ProductSwapPage() {
                   {productImages.map((img) => (
                     <div key={img.id} className="group relative aspect-square overflow-hidden rounded-xl border border-[#e5e6eb]/50 dark:border-[#30363d]/50">
                       <img src={img.preview} alt="" className="h-full w-full object-cover" />
+                      {img.uploading && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl">
+                          <svg className="h-5 w-5 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                        </div>
+                      )}
                       <button
                         onClick={() => removeImage(img.id)}
                         className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
@@ -600,13 +778,13 @@ export default function ProductSwapPage() {
                 <div>
                   <p className="mb-2 text-center text-sm font-medium text-[#7c3aed]">{video ? "替换后视频" : "AI生成视频"}</p>
                   <div className="relative overflow-hidden rounded-xl border-2 border-[#7c3aed]/30 dark:border-[#7c3aed]/50" style={{ minHeight: 200 }}>
-                    {video ? (
-                      <video src={video.preview} controls className="w-full bg-black" style={{ maxHeight: 360 }} />
+                    {resultVideoUrl ? (
+                      <video src={resultVideoUrl} controls className="w-full bg-black" style={{ maxHeight: 360 }} />
                     ) : (
                       <div className="flex flex-col items-center justify-center bg-gradient-to-br from-[#7c3aed]/5 to-[#ec4899]/5 py-16">
                         <svg className="mb-3 h-12 w-12 text-[#7c3aed]/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
                         <p className="text-sm font-medium text-[#7c3aed]/70">AI生成视频预览</p>
-                        <p className="mt-1 text-xs text-[#86909c]">（实际环境将展示AI生成的推广视频）</p>
+                        <p className="mt-1 text-xs text-[#86909c]">（Mock模式 - 接入真实视频生成后展示）</p>
                       </div>
                     )}
                     <div className="absolute left-2 top-2 flex items-center gap-1 rounded-lg bg-gradient-to-r from-[#7c3aed] to-[#ec4899] px-2.5 py-1 text-[10px] font-semibold text-white">
