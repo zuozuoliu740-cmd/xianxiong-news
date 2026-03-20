@@ -6,13 +6,13 @@ import { v4 as uuidv4 } from "uuid";
 
 export const runtime = "nodejs";
 
-const DATA_DIR = path.join(process.cwd(), "data");
+const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
 const HISTORY_FILE = path.join(DATA_DIR, "ai-lab-history.json");
 
 interface HistoryRecord {
   id: string;
   title: string;
-  type: "product" | "clothing" | "model";
+  type: "product" | "clothing" | "model" | "i2v";
   createdAt: string;
   duration: string;
   status: "completed" | "processing" | "failed";
@@ -60,6 +60,26 @@ export async function GET() {
       { error: "获取历史记录失败" },
       { status: 500 }
     );
+  }
+}
+
+// DELETE - 删除历史记录
+export async function DELETE(req: NextRequest) {
+  try {
+    const { id } = await req.json();
+    if (!id) {
+      return NextResponse.json({ error: "缺少记录ID" }, { status: 400 });
+    }
+    const history = await readHistory();
+    const filtered = history.filter((r) => r.id !== id);
+    if (filtered.length === history.length) {
+      return NextResponse.json({ error: "记录不存在" }, { status: 404 });
+    }
+    await writeHistory(filtered);
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error("Delete history error:", error);
+    return NextResponse.json({ error: "删除失败" }, { status: 500 });
   }
 }
 

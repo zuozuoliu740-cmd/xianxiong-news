@@ -37,6 +37,13 @@ export default function Home() {
   const [localNews, setLocalNews] = useState<NewsItem[]>([]);
   const [localLoading, setLocalLoading] = useState(true);
   const [localFetchTime, setLocalFetchTime] = useState<string>('');
+  const [bochaNews, setBochaNews] = useState<NewsItem[]>([]);
+  const [bochaLoading, setBochaLoading] = useState(true);
+  const [bochaFetchTime, setBochaFetchTime] = useState<string>('');
+  const [showPwdModal, setShowPwdModal] = useState(false);
+  const [pwdInput, setPwdInput] = useState('');
+  const [pwdError, setPwdError] = useState(false);
+  const [pendingUrl, setPendingUrl] = useState('');
 
   const fetchNews = useCallback(
     async (cat: string, query?: string) => {
@@ -75,8 +82,8 @@ export default function Home() {
     };
     
     fetchSources();
-    // 每2分钟刷新一次
-    const interval = setInterval(fetchSources, 2 * 60 * 1000);
+    // 每4小时刷新一次
+    const interval = setInterval(fetchSources, 4 * 60 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -96,8 +103,8 @@ export default function Home() {
     };
     
     fetchIranNews();
-    // 每2分钟刷新一次
-    const interval = setInterval(fetchIranNews, 2 * 60 * 1000);
+    // 每4小时刷新一次
+    const interval = setInterval(fetchIranNews, 4 * 60 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -116,8 +123,8 @@ export default function Home() {
     };
     
     fetchDingNews();
-    // 每2分钟刷新一次
-    const interval = setInterval(fetchDingNews, 2 * 60 * 1000);
+    // 每4小时刷新一次
+    const interval = setInterval(fetchDingNews, 4 * 60 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -136,8 +143,8 @@ export default function Home() {
     };
     
     fetchAntNews();
-    // 每2分钟刷新一次
-    const interval = setInterval(fetchAntNews, 2 * 60 * 1000);
+    // 每4小时刷新一次
+    const interval = setInterval(fetchAntNews, 4 * 60 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -157,8 +164,28 @@ export default function Home() {
     };
     
     fetchLocalNews();
-    // 每2分钟刷新一次
-    const interval = setInterval(fetchLocalNews, 2 * 60 * 1000);
+    // 每4小时刷新一次
+    const interval = setInterval(fetchLocalNews, 4 * 60 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // 拉取博查热搜新闻 - 从博查AI搜索API获取，每5分钟自动刷新
+  useEffect(() => {
+    const fetchBochaNews = () => {
+      setBochaLoading(true);
+      fetch("/api/news?bocha=true", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((d) => {
+          setBochaNews(d.news || []);
+          setBochaFetchTime(d.fetchTime || new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }));
+        })
+        .catch(() => setBochaNews([]))
+        .finally(() => setBochaLoading(false));
+    };
+    
+    fetchBochaNews();
+    // 每4小时刷新一次
+    const interval = setInterval(fetchBochaNews, 4 * 60 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -465,6 +492,67 @@ export default function Home() {
           </div>
         </div>
 
+        {/* ===== 博查热搜新闻滚动栏 ===== */}
+        <div className="mb-6 overflow-hidden rounded-2xl border border-[#f53f3f]/20 bg-gradient-to-r from-[#fff1f0] via-[#fff5f5] to-[#fff8f8] shadow-lg shadow-[#f53f3f]/5 dark:border-[#f53f3f]/30 dark:from-[#2d1111] dark:via-[#3d1818] dark:to-[#4d2020]">
+          <div className="flex items-center gap-4 px-5 py-4">
+            <div className="flex shrink-0 items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#f53f3f] to-[#ff7875]">
+                <svg className="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z" />
+                </svg>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-sm font-bold text-[#f53f3f] dark:text-[#ff7875]">博查热搜</span>
+                {bochaFetchTime && !bochaLoading && (
+                  <span className="text-[10px] text-[#86909c]">更新于 {bochaFetchTime}</span>
+                )}
+              </div>
+              {bochaLoading && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#f53f3f]/10 px-2.5 py-1 text-xs text-[#f53f3f]">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#f53f3f]"></span>
+                  加载中
+                </span>
+              )}
+            </div>
+            <div className="flex-1 overflow-hidden border-l border-[#f53f3f]/20 pl-4 dark:border-[#f53f3f]/30">
+              {bochaNews.length > 0 ? (
+                <div className="animate-marquee whitespace-nowrap">
+                  <span className="inline-flex items-center gap-8 text-sm text-[#1d2129] dark:text-[#e6edf3]">
+                    {bochaNews.slice(0, 8).map((item, i) => (
+                      <a
+                        key={item.id}
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 hover:text-[#f53f3f] dark:hover:text-[#ff7875] transition-colors duration-200"
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${i % 2 === 0 ? 'bg-[#f53f3f]' : 'bg-[#ff7875]'}`}></span>
+                        {item.title.length > 35 ? item.title.slice(0, 35) + '...' : item.title}
+                      </a>
+                    ))}
+                    {/* 重复一遍实现无缝滚动 */}
+                    {bochaNews.slice(0, 8).map((item, i) => (
+                      <a
+                        key={`dup-${item.id}`}
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 hover:text-[#f53f3f] dark:hover:text-[#ff7875] transition-colors duration-200"
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${i % 2 === 0 ? 'bg-[#f53f3f]' : 'bg-[#ff7875]'}`}></span>
+                        {item.title.length > 35 ? item.title.slice(0, 35) + '...' : item.title}
+                      </a>
+                    ))}
+                  </span>
+                </div>
+              ) : !bochaLoading ? (
+                <span className="text-sm text-[#86909c]">暂无热搜新闻</span>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
         {/* ===== 先雄AI实验室 ===== */}
         <section className="mb-8">
           <div className="mb-5 flex items-center gap-3">
@@ -611,14 +699,23 @@ export default function Home() {
                         </div>
                         <span className="text-xs text-[#86909c]">{s.desc}</span>
                       </div>
-                      <a
-                        href={s.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="shrink-0 rounded-lg bg-gradient-to-r from-[#3370ff] to-[#7c3aed] px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-all hover:shadow-md hover:shadow-[#3370ff]/20"
-                      >
-                        进入正能量
-                      </a>
+                      {s.id === "juhe" ? (
+                        <button
+                          onClick={() => { setPendingUrl(s.url); setPwdInput(''); setPwdError(false); setShowPwdModal(true); }}
+                          className="shrink-0 rounded-lg bg-gradient-to-r from-[#3370ff] to-[#7c3aed] px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-all hover:shadow-md hover:shadow-[#3370ff]/20"
+                        >
+                          进入正能量
+                        </button>
+                      ) : (
+                        <a
+                          href={s.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 rounded-lg bg-gradient-to-r from-[#3370ff] to-[#7c3aed] px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-all hover:shadow-md hover:shadow-[#3370ff]/20"
+                        >
+                          访问
+                        </a>
+                      )}
                     </div>
 
                     {/* 新闻列表 - 先雄的正能量入口特殊展示 */}
@@ -876,6 +973,56 @@ export default function Home() {
           </div>
         </footer>
       </div>
+
+      {/* === 密码验证弹窗 === */}
+      {showPwdModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowPwdModal(false)}>
+          <div className="mx-4 w-full max-w-sm rounded-2xl border border-[#e5e6eb]/50 bg-white p-6 shadow-2xl dark:border-[#30363d] dark:bg-[#161b22]" onClick={e => e.stopPropagation()}>
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#3370ff] to-[#7c3aed]">
+                <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-[#1d2129] dark:text-[#e6edf3]">身份验证</h3>
+                <p className="text-xs text-[#86909c]">请输入密码以继续访问</p>
+              </div>
+            </div>
+            <input
+              type="text"
+              value={pwdInput}
+              onChange={e => { setPwdInput(e.target.value); setPwdError(false); }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  if (pwdInput === '我要验牌') { setShowPwdModal(false); window.open(pendingUrl, '_blank'); }
+                  else setPwdError(true);
+                }
+              }}
+              placeholder="请输入密码"
+              autoFocus
+              style={{ WebkitTextSecurity: 'disc' } as React.CSSProperties}
+              className={`w-full rounded-xl border px-4 py-3 text-sm outline-none transition-colors ${
+                pwdError
+                  ? 'border-red-400 bg-red-50/50 text-red-600 dark:border-red-500/50 dark:bg-red-950/20 dark:text-red-300'
+                  : 'border-[#e5e6eb] bg-[#f7f8fa]/50 text-[#1d2129] focus:border-[#3370ff] dark:border-[#30363d] dark:bg-[#0d1117]/50 dark:text-[#e6edf3]'
+              }`}
+            />
+            {pwdError && <p className="mt-2 text-xs text-red-500">密码错误，请重新输入</p>}
+            <div className="mt-4 flex gap-3">
+              <button
+                onClick={() => setShowPwdModal(false)}
+                className="flex-1 rounded-xl border border-[#e5e6eb] bg-white py-2.5 text-xs font-medium text-[#4e5969] transition-all hover:bg-[#f7f8fa] dark:border-[#30363d] dark:bg-[#21262d] dark:text-[#8b949e]"
+              >取消</button>
+              <button
+                onClick={() => {
+                  if (pwdInput === '我要验牌') { setShowPwdModal(false); window.open(pendingUrl, '_blank'); }
+                  else setPwdError(true);
+                }}
+                className="flex-1 rounded-xl bg-gradient-to-r from-[#3370ff] to-[#7c3aed] py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:shadow-md"
+              >确认</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

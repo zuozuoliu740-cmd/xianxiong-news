@@ -22,6 +22,10 @@ export interface VideoTask {
   dashscopeTaskId?: string;
   /** 轮询次数，用于估算进度 */
   pollCount?: number;
+  /** 音频合并是否已开始 */
+  mergeStarted?: boolean;
+  /** DashScope原始视频URL（合并前） */
+  dsVideoUrl?: string;
 }
 
 // 全局单例存储

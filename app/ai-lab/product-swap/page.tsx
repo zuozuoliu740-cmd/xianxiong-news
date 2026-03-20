@@ -11,13 +11,14 @@ function genId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 }
 
-type SwapType = "product" | "clothing" | "model";
+type SwapType = "product" | "clothing" | "model" | "i2v";
 
 /** 每种替换类型对应的默认提示词 */
 const DEFAULT_PROMPTS: Record<SwapType, string> = {
   product: "把上传图片中的产品，替换掉视频中的产品，保持视频的整体风格和运动轨迹不变，让替换后的画面自然流畅",
   clothing: "把上传图片中的服饰，替换掉视频中模特身上的服装，保持模特的动作姿态不变，让服饰在视频中自然展示",
   model: "把上传图片中的人物/模特，替换掉视频中的人物，保持原始视频的动作和场景不变，让替换后的人物动作自然协调",
+  i2v: "将图片中的内容生成一段动态视频，画面自然流畅，运动幅度适中",
 };
 
 interface UploadedFile {
@@ -72,11 +73,80 @@ export default function ProductSwapPage() {
   const [uploadedVideoUrl, setUploadedVideoUrl] = useState<string | null>(null);
   const [uploadedImageUrls, setUploadedImageUrls] = useState<string[]>([]);
   const [showShareMenu, setShowShareMenu] = useState(false);
+  const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [videoPrompt, setVideoPrompt] = useState(DEFAULT_PROMPTS["product"]);
+  const [videoDuration, setVideoDuration] = useState(5);
+  const [customDuration, setCustomDuration] = useState(false);
+  const [enableVoiceover, setEnableVoiceover] = useState(false);
+  const [voiceoverUrl, setVoiceoverUrl] = useState<string | null>(null);
+  const [isGeneratingVoiceover, setIsGeneratingVoiceover] = useState(false);
+  const [uploadedVideoDuration, setUploadedVideoDuration] = useState<number | null>(null);
+  const [previewVideo, setPreviewVideo] = useState<HistoryVideo | null>(null);
+
+  /** 获取当前有效的视频时长：i2v模式用用户选择的时长，其他模式用上传视频的实际时长 */
+  const effectiveDuration = swapType === "i2v" ? videoDuration : (uploadedVideoDuration || videoDuration);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  /** 生成配音 */
+  const handleGenerateVoiceover = async (text?: string) => {
+    const descText = text || productDesc;
+    if (!descText) {
+      setApiError("请先生成或输入商品文案");
+      return;
+    }
+    setIsGeneratingVoiceover(true);
+    setVoiceoverUrl(null);
+    try {
+      const res = await fetch("/api/ai-lab/generate-tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: descText, duration: effectiveDuration }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "配音生成失败" }));
+        throw new Error(err.error || "配音生成失败");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      setVoiceoverUrl(url);
+    } catch (err: any) {
+      setApiError("配音生成失败: " + (err.message || "网络错误"));
+    }
+    setIsGeneratingVoiceover(false);
+  };
+
+  /** 视频+音频同步播放 */
+  const handleSyncPlay = () => {
+    const v = videoRef.current;
+    const a = audioRef.current;
+    if (v && a) {
+      v.currentTime = 0;
+      a.currentTime = 0;
+      v.play();
+      a.play();
+    } else if (v) {
+      v.currentTime = 0;
+      v.play();
+    }
+  };
+
+  /** 视频暂停时同步暂停音频 */
+  const handleVideoPause = () => {
+    audioRef.current?.pause();
+  };
+
+  /** 视频播放时同步播放音频 */
+  const handleVideoPlay = () => {
+    if (audioRef.current && voiceoverUrl) {
+      audioRef.current.currentTime = videoRef.current?.currentTime || 0;
+      audioRef.current.play();
+    }
+  };
 
   // ---- API Logic (unchanged) ----
   const fetchHistory = useCallback(async () => {
@@ -105,7 +175,17 @@ export default function ProductSwapPage() {
             setResultReady(true);
             setGenerating(false);
             setResultVideoUrl(data.resultUrl || null);
-            const typeLabels = { product: "商品", clothing: "服饰", model: "模特" };
+            // 视频生成完成后，处理配音：AI配音开关 或 英文版本（含配音）
+            const shouldVoiceover = enableVoiceover || (needEnglish && !!englishDesc);
+            if (shouldVoiceover) {
+              // 英文版本开启时优先使用英文文案配音
+              const voiceText = (needEnglish && englishDesc) ? englishDesc : productDesc;
+              if (voiceText) {
+                if (!enableVoiceover) setEnableVoiceover(true); // 确保配音UI可见
+                setTimeout(() => handleGenerateVoiceover(voiceText), 500);
+              }
+            }
+            const typeLabels: Record<SwapType, string> = { product: "商品", clothing: "服饰", model: "模特", i2v: "图生" };
             fetch("/api/ai-lab/history", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -135,6 +215,7 @@ export default function ProductSwapPage() {
     { id: "product", label: "商品替换", icon: "🛍️" },
     { id: "clothing", label: "服饰替换", icon: "👗" },
     { id: "model", label: "模特替换", icon: "🧑" },
+    { id: "i2v", label: "图生视频", icon: "🎬" },
   ];
 
   const handleVideoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -144,6 +225,15 @@ export default function ProductSwapPage() {
     const id = genId();
     setVideo({ file, preview, id, uploading: true });
     setUploadingVideo(true);
+    // 检测上传视频的实际时长
+    const tempVideo = document.createElement('video');
+    tempVideo.preload = 'metadata';
+    tempVideo.onloadedmetadata = () => {
+      const dur = Math.round(tempVideo.duration);
+      if (dur > 0) setUploadedVideoDuration(dur);
+      URL.revokeObjectURL(tempVideo.src);
+    };
+    tempVideo.src = URL.createObjectURL(file);
     setApiError(null);
     try {
       const fd = new FormData();
@@ -193,7 +283,13 @@ export default function ProductSwapPage() {
   const removeImage = (id: string) => {
     setProductImages((prev) => {
       const removed = prev.find((img) => img.id === id);
-      if (removed) URL.revokeObjectURL(removed.preview);
+      if (removed) {
+        URL.revokeObjectURL(removed.preview);
+        // 同步清理 uploadedImageUrls，避免残留旧图片URL
+        if (removed.serverUrl) {
+          setUploadedImageUrls((urls) => urls.filter((u) => u !== removed.serverUrl));
+        }
+      }
       return prev.filter((img) => img.id !== id);
     });
   };
@@ -202,6 +298,34 @@ export default function ProductSwapPage() {
     if (video) URL.revokeObjectURL(video.preview);
     setVideo(null);
     setUploadedVideoUrl(null);
+    setUploadedVideoDuration(null);
+  };
+
+  /** 基于图片内容智能AI推荐提示词 */
+  const handleGeneratePrompt = async () => {
+    // 直接从当前 productImages 获取 serverUrl，确保与UI显示的图片一致
+    const currentImageUrls = productImages
+      .map((img) => img.serverUrl)
+      .filter((url): url is string => !!url);
+    if (currentImageUrls.length === 0) {
+      setApiError("请先上传图片");
+      return;
+    }
+    setIsGeneratingPrompt(true);
+    setApiError(null);
+    try {
+      const res = await fetch("/api/ai-lab/generate-prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrls: currentImageUrls }),
+      });
+      const data = await res.json();
+      if (data.success) setVideoPrompt(data.prompt);
+      else setApiError(data.error || "提示词生成失败");
+    } catch (err: any) {
+      setApiError("提示词生成失败: " + (err.message || "网络错误"));
+    }
+    setIsGeneratingPrompt(false);
   };
 
   const handleGenerateDesc = async () => {
@@ -211,7 +335,15 @@ export default function ProductSwapPage() {
       const res = await fetch("/api/ai-lab/generate-desc", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ swapType, imageCount: productImages.length, hasVideo: !!video, videoUrl: resultVideoUrl || undefined }),
+        body: JSON.stringify({
+          swapType,
+          imageCount: productImages.length,
+          hasVideo: !!video,
+          videoUrl: resultVideoUrl || undefined,
+          imageUrls: uploadedImageUrls.length > 0 ? uploadedImageUrls : undefined,
+          uploadedVideoUrl: uploadedVideoUrl || undefined,
+          videoDuration: effectiveDuration,
+        }),
       });
       const data = await res.json();
       if (data.success) setProductDesc(data.desc);
@@ -256,7 +388,7 @@ export default function ProductSwapPage() {
         body: JSON.stringify({
           videoUrl: uploadedVideoUrl, imageUrls: uploadedImageUrls,
           desc: productDesc, swapType, needEnglish, englishDesc,
-          videoPrompt,
+          videoPrompt, duration: videoDuration,
         }),
       });
       const data = await res.json();
@@ -289,6 +421,13 @@ export default function ProductSwapPage() {
     setUploadedVideoUrl(null);
     setUploadedImageUrls([]);
     setVideoPrompt(DEFAULT_PROMPTS["product"]);
+    setVideoDuration(5);
+    setCustomDuration(false);
+    setEnableVoiceover(false);
+    setVoiceoverUrl(null);
+    setIsGeneratingVoiceover(false);
+    setIsGeneratingPrompt(false);
+    setUploadedVideoDuration(null);
     setApiError(null);
   };
 
@@ -407,10 +546,32 @@ export default function ProductSwapPage() {
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {historyVideos.map((v, vi) => (
-                  <div key={v.id} className="group overflow-hidden rounded-2xl border border-[#e5e6eb]/50 bg-white shadow-[0_2px_12px_0_rgba(0,0,0,0.04)] transition-all hover:shadow-lg hover:-translate-y-0.5 dark:border-[#30363d]/50 dark:bg-[#161b22]">
-                    {/* Thumbnail */}
-                    <div className={`relative flex h-40 items-center justify-center bg-gradient-to-br ${GRADIENTS[vi % GRADIENTS.length]}`}>
-                      <svg className="h-10 w-10 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                  <div key={v.id} className="group relative overflow-hidden rounded-2xl border border-[#e5e6eb]/50 bg-white shadow-[0_2px_12px_0_rgba(0,0,0,0.04)] transition-all hover:shadow-lg hover:-translate-y-0.5 dark:border-[#30363d]/50 dark:bg-[#161b22]">
+                    {/* Delete Button */}
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (!confirm("确定删除这个视频记录？")) return;
+                        try {
+                          const res = await fetch("/api/ai-lab/history", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: v.id }) });
+                          if (res.ok) fetchHistory();
+                        } catch {}
+                      }}
+                      className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white/70 opacity-0 backdrop-blur-sm transition-all hover:bg-red-500 hover:text-white group-hover:opacity-100"
+                      title="删除"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
+                    {/* Thumbnail - show actual video or gradient fallback */}
+                    <div
+                      onClick={() => v.videoUrl && v.status === "completed" && setPreviewVideo(v)}
+                      className={`relative flex h-40 cursor-pointer items-center justify-center overflow-hidden ${v.videoUrl ? 'bg-black' : `bg-gradient-to-br ${GRADIENTS[vi % GRADIENTS.length]}`}`}
+                    >
+                      {v.videoUrl ? (
+                        <video src={v.videoUrl} className="h-full w-full object-cover" preload="metadata" muted playsInline />
+                      ) : (
+                        <svg className="h-10 w-10 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                      )}
                       <div className="absolute inset-0 flex items-center justify-center bg-black/10 opacity-0 transition-opacity group-hover:opacity-100">
                         <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white/90 shadow-lg"><svg className="ml-0.5 h-5 w-5 text-[#7c3aed]" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg></div>
                       </div>
@@ -438,7 +599,24 @@ export default function ProductSwapPage() {
                       <div className="flex gap-2">
                         {v.status === "completed" ? (
                           <>
-                            <button className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[#7c3aed] to-[#a855f7] py-2 text-xs font-medium text-white transition-all hover:shadow-md">
+                            <button
+                              onClick={async () => {
+                                if (!v.videoUrl) return;
+                                try {
+                                  const res = await fetch(v.videoUrl);
+                                  const blob = await res.blob();
+                                  const url = URL.createObjectURL(blob);
+                                  const a = document.createElement('a');
+                                  a.href = url;
+                                  a.download = `${v.title || 'video'}-${Date.now()}.mp4`;
+                                  document.body.appendChild(a);
+                                  a.click();
+                                  document.body.removeChild(a);
+                                  URL.revokeObjectURL(url);
+                                } catch { alert('下载失败，请重试'); }
+                              }}
+                              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[#7c3aed] to-[#a855f7] py-2 text-xs font-medium text-white transition-all hover:shadow-md"
+                            >
                               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                               下载
                             </button>
@@ -473,7 +651,7 @@ export default function ProductSwapPage() {
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#86909c]">替换类型</h3>
               <div className="flex gap-2">
                 {swapTypes.map((t) => (
-                  <button key={t.id} onClick={() => { setSwapType(t.id); setVideoPrompt(DEFAULT_PROMPTS[t.id]); }}
+                  <button key={t.id} onClick={() => { setSwapType(t.id); setVideoPrompt(DEFAULT_PROMPTS[t.id]); setVideoDuration(t.id === "i2v" ? 10 : 5); setCustomDuration(false); }}
                     className={`flex flex-1 flex-col items-center gap-1 rounded-xl border-2 py-2.5 text-xs font-medium transition-all ${swapType === t.id ? "border-[#7c3aed] bg-[#7c3aed]/5 text-[#7c3aed] dark:border-[#a855f7] dark:text-[#a78bfa]" : "border-[#e5e6eb] text-[#4e5969] hover:border-[#7c3aed]/30 dark:border-[#30363d] dark:text-[#8b949e]"}`}
                   >
                     <span className="text-base">{t.icon}</span>
@@ -483,7 +661,8 @@ export default function ProductSwapPage() {
               </div>
             </div>
 
-            {/* Video Upload */}
+            {/* Video Upload - 图生视频模式下隐藏 */}
+            {swapType !== "i2v" && (
             <div className="rounded-2xl border border-[#e5e6eb]/60 bg-white p-4 shadow-sm dark:border-[#30363d]/50 dark:bg-[#161b22]">
               <h3 className="mb-3 flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-[#86909c]">
                 原始视频 <span className="text-[10px] font-normal normal-case">可选</span>
@@ -510,11 +689,12 @@ export default function ProductSwapPage() {
               )}
               <input ref={videoInputRef} type="file" accept="video/mp4,video/quicktime" className="hidden" onChange={handleVideoUpload} />
             </div>
+            )}
 
             {/* Product Images */}
             <div className="rounded-2xl border border-[#e5e6eb]/60 bg-white p-4 shadow-sm dark:border-[#30363d]/50 dark:bg-[#161b22]">
               <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[#86909c]">
-                商品图片 <span className="font-normal normal-case">({productImages.length}/5)</span>
+                {swapType === "i2v" ? "上传图片" : "商品图片"} <span className="font-normal normal-case">({productImages.length}/5)</span>
               </h3>
               <div className="grid grid-cols-3 gap-2">
                 {productImages.map((img) => (
@@ -539,7 +719,7 @@ export default function ProductSwapPage() {
                 )}
               </div>
               <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageUpload} />
-              {productImages.length === 0 && <p className="mt-2 text-[10px] text-[#c9cdd4]">上传商品图片后即可生成文案和视频</p>}
+              {productImages.length === 0 && <p className="mt-2 text-[10px] text-[#c9cdd4]">{swapType === "i2v" ? "上传图片后即可生成视频，支持AI推荐提示词" : "上传商品图片后即可生成文案和视频"}</p>}
             </div>
           </div>
 
@@ -562,10 +742,85 @@ export default function ProductSwapPage() {
                   className="rounded-md border border-[#e5e6eb] bg-[#f7f8fa] px-2 py-1 text-[10px] text-[#86909c] transition-colors hover:border-[#7c3aed]/30 hover:text-[#7c3aed] dark:border-[#30363d] dark:bg-[#21262d] dark:text-[#8b949e]">
                   恢复默认提示词
                 </button>
-                <span className="text-[10px] text-[#c9cdd4] dark:text-[#484f58]">切换替换类型会自动更新提示词</span>
+                {swapType === "i2v" && (
+                  <button onClick={handleGeneratePrompt} disabled={isGeneratingPrompt || uploadedImageUrls.length === 0}
+                    className="flex items-center gap-1 rounded-md bg-gradient-to-r from-[#7c3aed] to-[#a855f7] px-3 py-1 text-[10px] font-medium text-white transition-all hover:shadow-md disabled:opacity-50">
+                    {isGeneratingPrompt ? (
+                      <><svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> 分析中...</>
+                    ) : (
+                      <><svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg> AI推荐提示词</>
+                    )}
+                  </button>
+                )}
+                <span className="text-[10px] text-[#c9cdd4] dark:text-[#484f58]">{swapType === "i2v" ? "上传图片后可用AI智能推荐" : "切换替换类型会自动更新提示词"}</span>
+              </div>
+              {swapType === "i2v" && (
+                <p className="mt-1.5 rounded-lg bg-[#7c3aed]/5 px-3 py-1.5 text-[10px] text-[#7c3aed]/70 dark:bg-[#7c3aed]/10 dark:text-[#a78bfa]/80">
+                  💡 图生视频以上传图片为起始画面，提示词应描述图片中已有内容的动态效果（如镜头运动、光影变化），无法凭空添加图片中不存在的人物或物体
+                </p>
+              )}
+            </div>
+            
+            {/* Duration Selector - 图生视频模式专属 */}
+            {swapType === "i2v" && (
+            <div className="rounded-2xl border border-[#e5e6eb]/60 bg-white p-4 shadow-sm dark:border-[#30363d]/50 dark:bg-[#161b22]">
+              <div className="flex flex-wrap items-center gap-4">
+                {/* Duration */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-[#86909c] uppercase tracking-wider">视频时长</span>
+                  <div className="flex gap-1.5">
+                    {[5, 10].map((d) => (
+                      <button key={d} onClick={() => { setVideoDuration(d); setCustomDuration(false); }}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${!customDuration && videoDuration === d ? "bg-[#7c3aed] text-white shadow-sm" : "border border-[#e5e6eb] text-[#4e5969] hover:border-[#7c3aed]/30 dark:border-[#30363d] dark:text-[#8b949e]"}`}>
+                        {d}秒
+                      </button>
+                    ))}
+                    <button onClick={() => setCustomDuration(true)}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${customDuration ? "bg-[#7c3aed] text-white shadow-sm" : "border border-[#e5e6eb] text-[#4e5969] hover:border-[#7c3aed]/30 dark:border-[#30363d] dark:text-[#8b949e]"}`}>
+                      自定义
+                    </button>
+                  </div>
+                  {customDuration && (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={1}
+                        max={30}
+                        value={videoDuration}
+                        onChange={(e) => {
+                          const v = Math.max(1, Math.min(30, Number(e.target.value) || 1));
+                          setVideoDuration(v);
+                        }}
+                        className="w-14 rounded-lg border border-[#7c3aed]/50 bg-white px-2 py-1.5 text-center text-xs font-medium text-[#1d2129] outline-none focus:border-[#7c3aed] dark:bg-[#0d1117] dark:text-[#e6edf3] dark:border-[#7c3aed]/50"
+                      />
+                      <span className="text-xs text-[#86909c]">秒</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
+            )}
 
+            {/* AI Voiceover Toggle - 所有模式通用 */}
+            <div className="rounded-2xl border border-[#e5e6eb]/60 bg-white p-4 shadow-sm dark:border-[#30363d]/50 dark:bg-[#161b22]">
+              <div className="flex items-center gap-2">
+                <button onClick={() => setEnableVoiceover(!enableVoiceover)}
+                  className={`relative h-5 w-9 flex-shrink-0 rounded-full transition-colors ${enableVoiceover ? "bg-[#7c3aed]" : "bg-[#c9cdd4] dark:bg-[#30363d]"}`}>
+                  <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${enableVoiceover ? "translate-x-4" : "translate-x-0.5"}`} />
+                </button>
+                <span className="text-xs text-[#4e5969] dark:text-[#8b949e]">
+                  🎵 AI配音{swapType === "i2v" ? "（文案转语音）" : `（替换原视频声音${uploadedVideoDuration ? ` · ${uploadedVideoDuration}秒` : ''}）`}
+                </span>
+              </div>
+              {enableVoiceover && (
+                <p className="mt-2 text-[10px] text-[#86909c] dark:text-[#484f58]">
+                  {swapType === "i2v"
+                    ? `视频生成完成后，将自动基于商品文案生成${videoDuration}秒配音，文案将自动裁剪匹配视频时长`
+                    : `视频生成完成后，将自动基于商品文案生成${uploadedVideoDuration ? `${uploadedVideoDuration}秒` : ''}AI配音，替换掉原视频内的声音`}
+                </p>
+              )}
+            </div>
+            
             {/* Product Description */}
             <div className="rounded-2xl border border-[#e5e6eb]/60 bg-white p-5 shadow-sm dark:border-[#30363d]/50 dark:bg-[#161b22]">
               <div className="mb-3 flex items-center justify-between">
@@ -615,7 +870,7 @@ export default function ProductSwapPage() {
               ) : (
                 <span className="flex items-center justify-center gap-2">
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                  {video ? "开始AI替换生成" : "开始AI视频生成"}
+                  {video ? "开始AI替换生成" : swapType === "i2v" ? "开始AI图生视频" : "开始AI视频生成"}
                 </span>
               )}
             </button>
@@ -663,7 +918,15 @@ export default function ProductSwapPage() {
                     <p className="mb-2 text-center text-[11px] font-medium text-[#7c3aed]">AI生成结果</p>
                     <div className="relative overflow-hidden rounded-xl border-2 border-[#7c3aed]/30" style={{ minHeight: 160 }}>
                       {resultVideoUrl ? (
-                        <video src={resultVideoUrl} controls className="w-full bg-black" style={{ maxHeight: 280 }} />
+                        <video
+                          ref={videoRef}
+                          src={resultVideoUrl}
+                          controls
+                          className="w-full bg-black"
+                          style={{ maxHeight: 280 }}
+                          onPause={handleVideoPause}
+                          onPlay={handleVideoPlay}
+                        />
                       ) : (
                         <div className="flex flex-col items-center justify-center py-12 bg-gradient-to-br from-[#7c3aed]/5 to-[#ec4899]/5">
                           <svg className="mb-2 h-10 w-10 text-[#7c3aed]/30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
@@ -674,6 +937,66 @@ export default function ProductSwapPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Voiceover Section */}
+                {enableVoiceover && (
+                  <div className="mt-4 rounded-xl border border-[#7c3aed]/20 bg-gradient-to-r from-[#7c3aed]/5 to-[#ec4899]/5 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="flex items-center gap-1.5 text-xs font-semibold text-[#7c3aed]">
+                        <span>🎤</span> AI配音
+                      </h4>
+                      <button
+                        onClick={() => handleGenerateVoiceover()}
+                        disabled={isGeneratingVoiceover || !productDesc}
+                        className="flex items-center gap-1 rounded-lg bg-gradient-to-r from-[#7c3aed] to-[#a855f7] px-3 py-1 text-[10px] font-medium text-white transition-all hover:shadow-md disabled:opacity-50"
+                      >
+                        {isGeneratingVoiceover ? (
+                          <><svg className="h-3 w-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> 生成中...</>
+                        ) : voiceoverUrl ? "🔄 重新生成" : "🎤 生成配音"}
+                      </button>
+                    </div>
+                    {isGeneratingVoiceover && (
+                      <div className="flex items-center gap-2 text-xs text-[#7c3aed]">
+                        <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                        正在将文案转换为{effectiveDuration}秒配音...
+                      </div>
+                    )}
+                    {voiceoverUrl && (
+                      <div className="space-y-2">
+                        <audio ref={audioRef} src={voiceoverUrl} className="hidden" />
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={handleSyncPlay}
+                            className="flex items-center gap-1.5 rounded-lg bg-[#7c3aed] px-4 py-2 text-xs font-medium text-white transition-all hover:bg-[#6d28d9] hover:shadow-md"
+                          >
+                            <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                            同步播放视频+配音
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (!voiceoverUrl) return;
+                              const a = document.createElement('a');
+                              a.href = voiceoverUrl;
+                              a.download = `voiceover-${Date.now()}.mp3`;
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                            }}
+                            className="flex items-center gap-1.5 rounded-lg border border-[#e5e6eb] bg-white px-3 py-2 text-xs font-medium text-[#4e5969] transition-all hover:border-[#7c3aed]/30 hover:text-[#7c3aed] dark:border-[#30363d] dark:bg-[#21262d] dark:text-[#8b949e]"
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                            下载配音
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-[#86909c]">✅ 配音已生成，点击“同步播放”可同时播放视频和配音</p>
+                      </div>
+                    )}
+                    {!voiceoverUrl && !isGeneratingVoiceover && !productDesc && (
+                      <p className="text-[10px] text-[#c9cdd4]">请先生成或输入商品文案，再生成配音</p>
+                    )}
+                  </div>
+                )}
+
                 {/* Actions */}
                 <div className="mt-4 flex flex-wrap justify-center gap-3">
                   <button
@@ -738,6 +1061,74 @@ export default function ProductSwapPage() {
         </div>
         )}
       </div>
+
+      {/* Video Preview Modal */}
+      {previewVideo && previewVideo.videoUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={() => setPreviewVideo(null)}
+        >
+          <div
+            className="relative mx-4 w-full max-w-3xl overflow-hidden rounded-2xl bg-[#161b22] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-[#30363d] px-5 py-3">
+              <div>
+                <h3 className="text-sm font-semibold text-white">{previewVideo.title}</h3>
+                <p className="mt-0.5 text-xs text-[#8b949e]">{previewVideo.desc}</p>
+              </div>
+              <button
+                onClick={() => setPreviewVideo(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-[#8b949e] transition-colors hover:bg-[#30363d] hover:text-white"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            {/* Video Player */}
+            <div className="bg-black">
+              <video
+                src={previewVideo.videoUrl}
+                controls
+                autoPlay
+                className="mx-auto w-full"
+                style={{ maxHeight: '70vh' }}
+              />
+            </div>
+            {/* Footer Actions */}
+            <div className="flex items-center justify-between border-t border-[#30363d] px-5 py-3">
+              <div className="flex items-center gap-2 text-xs text-[#8b949e]">
+                <span className={`rounded-full px-2 py-0.5 font-medium ${previewVideo.type === "product" ? "bg-[#7c3aed]/20 text-[#a78bfa]" : previewVideo.type === "clothing" ? "bg-[#ec4899]/20 text-[#f472b6]" : "bg-[#f97316]/20 text-[#fb923c]"}`}>
+                  {previewVideo.type === "product" ? "🛍️ 商品" : previewVideo.type === "clothing" ? "👗 服饰" : "🧑 模特"}
+                </span>
+                <span>{previewVideo.createdAt}</span>
+                <span>{previewVideo.duration}</span>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!previewVideo.videoUrl) return;
+                  try {
+                    const res = await fetch(previewVideo.videoUrl);
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${previewVideo.title || 'video'}-${Date.now()}.mp4`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                  } catch { alert('下载失败'); }
+                }}
+                className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[#7c3aed] to-[#a855f7] px-4 py-2 text-xs font-medium text-white transition-all hover:shadow-lg"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                下载视频
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

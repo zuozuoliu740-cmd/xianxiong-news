@@ -8,8 +8,8 @@ const ENGLISH_SOURCES = new Set(["reuters", "chinadaily", "gt"]);
 
 // ---- 内存缓存 ----
 const cache = new Map<string, { data: NewsItem[]; expireAt: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 默认5分钟
-const SHORT_CACHE_TTL = 2 * 60 * 1000; // 短缓存2分钟（用于钉钉、蚂蚁集团等动态新闻）
+const CACHE_TTL = 4 * 60 * 60 * 1000; // 4小时
+const SHORT_CACHE_TTL = 4 * 60 * 60 * 1000; // 4小时
 
 function getCache(key: string): NewsItem[] | null {
   const entry = cache.get(key);

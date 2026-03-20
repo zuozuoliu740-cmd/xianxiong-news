@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { videoTasks } from "@/lib/video-tasks";
 import { queryVideoTask } from "@/lib/aliyun/dashscope";
+import { mergeAudioWithAiVideo } from "@/lib/ffmpeg-merge";
 
 export const runtime = "nodejs";
 
@@ -54,10 +55,35 @@ export async function GET(req: NextRequest) {
     task.progress = estimateProgress(dsResult.status, task.pollCount);
 
     if (dsResult.status === "SUCCEEDED" && dsResult.videoUrl) {
-      task.status = "completed";
-      task.progress = 100;
-      task.resultUrl = dsResult.videoUrl;
-      console.log(`[status] 任务完成: ${taskId}, 视频: ${dsResult.videoUrl}`);
+      // 有原始视频的替换任务：需要将原始音频合并到AI生成的视频中
+      if (task.params.videoUrl && !task.mergeStarted) {
+        task.mergeStarted = true;
+        task.progress = 95;
+        task.dsVideoUrl = dsResult.videoUrl;
+        console.log(`[status] 视频生成完成，开始合并原始音频: ${taskId}`);
+
+        // 异步合并，不阻塞当前请求
+        mergeAudioWithAiVideo(task.params.videoUrl, dsResult.videoUrl)
+          .then((mergedUrl) => {
+            task.status = "completed";
+            task.progress = 100;
+            task.resultUrl = mergedUrl;
+            console.log(`[status] 音频合并完成: ${taskId}, 视频: ${mergedUrl}`);
+          })
+          .catch((err) => {
+            console.error(`[status] 音频合并失败，使用原始AI视频:`, err);
+            task.status = "completed";
+            task.progress = 100;
+            task.resultUrl = dsResult.videoUrl;
+          });
+      } else if (!task.params.videoUrl) {
+        // 无原始视频（图生视频模式），直接完成
+        task.status = "completed";
+        task.progress = 100;
+        task.resultUrl = dsResult.videoUrl;
+        console.log(`[status] 任务完成: ${taskId}, 视频: ${dsResult.videoUrl}`);
+      }
+      // mergeStarted 但未完成时，保持 processing + 95% 状态，前端继续轮询
     } else if (dsResult.status === "FAILED") {
       task.status = "failed";
       task.progress = 0;

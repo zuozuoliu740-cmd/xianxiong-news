@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getNewsBySource, NEWS_SOURCES, fetchJuheNews } from "@/lib/news-scraper";
+import { searchBochaNews } from "@/lib/bocha-search";
 import type { NewsItem } from "@/lib/brave-search";
 
 // 强制动态渲染，禁止 Next.js 静态缓存
@@ -64,8 +65,28 @@ export async function GET(request: NextRequest) {
   const ant = searchParams.get("ant") === "true";
   const iran = searchParams.get("iran") === "true";
   const local = searchParams.get("local") === "true";
+  const bocha = searchParams.get("bocha") === "true";
 
   try {
+    // 如果请求博查热搜新闻
+    if (bocha) {
+      const bochaNews = await searchBochaNews("今日热点新闻", 10);
+      const now = new Date();
+      const fetchTime = now.toLocaleString('zh-CN', { 
+        month: '2-digit', 
+        day: '2-digit', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+      return jsonResponse({
+        news: bochaNews.map(item => ({ ...item, fetchedAt: fetchTime })),
+        category: "bocha",
+        query: "博查热搜",
+        timestamp: now.toISOString(),
+        fetchTime,
+      });
+    }
+
     // 如果请求本地新闻，优先API，失败回退到爬虫
     if (local) {
       const localKeywords = ['杭州', '西湖', '钱塘江', '余杭', '萧山', '滨江', '拱墅', '上城', '下城', '江干', '富阳', '临安', '桐庐', '淳安', '建德', '浙里办', '浙江', '杭帮菜', '亚运会', '亚残运会', '杭州地铁', '杭州公交', '杭州机场', '杭州东站', '杭州西站'];
