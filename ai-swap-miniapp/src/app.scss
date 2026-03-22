@@ -1,0 +1,13 @@
+// Global styles
+page {
+  background-color: #0f0f1a;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', Roboto, sans-serif;
+  color: #e5e7eb;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+// Smooth transitions globally
+view, text {
+  box-sizing: border-box;
+}

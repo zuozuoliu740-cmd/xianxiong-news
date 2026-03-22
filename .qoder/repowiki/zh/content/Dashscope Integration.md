@@ -7,9 +7,11 @@
 - [lib/aliyun/dashscope.ts](file://lib/aliyun/dashscope.ts)
 - [app/api/ai-lab/generate-desc/route.ts](file://app/api/ai-lab/generate-desc/route.ts)
 - [app/api/ai-lab/generate-prompt/route.ts](file://app/api/ai-lab/generate-prompt/route.ts)
+- [app/api/ai-lab/generate-tts/route.ts](file://app/api/ai-lab/generate-tts/route.ts)
 - [app/api/ai-lab/generate-video/route.ts](file://app/api/ai-lab/generate-video/route.ts)
 - [app/api/ai-lab/generate-video/status/route.ts](file://app/api/ai-lab/generate-video/status/route.ts)
 - [app/api/ai-lab/history/route.ts](file://app/api/ai-lab/history/route.ts)
+- [app/api/ai-lab/translate/route.ts](file://app/api/ai-lab/translate/route.ts)
 - [app/api/ai-lab/upload/route.ts](file://app/api/ai-lab/upload/route.ts)
 - [lib/video-tasks.ts](file://lib/video-tasks.ts)
 - [app/ai-lab/product-swap/page.tsx](file://app/ai-lab/product-swap/page.tsx)
@@ -18,12 +20,10 @@
 
 ## 更新摘要
 **变更内容**
-- 新增视频下载功能，允许用户直接下载生成的AI视频文件
-- 新增分享到短视频平台功能，支持抖音、快手、小红书、视频号、B站等平台
-- 新增视觉分析功能(qwen-vl-max)，基于图片内容智能生成视频提示词和分析视频风格
-- 新增视频换人模型(wan2.2-animate-mix)支持，实现视频中角色替换功能
-- 增强AI内容分析能力，支持多模态内容理解和生成
-- 扩展视频生成选项，提供商品替换、服饰替换和模特替换三种模式
+- 新增 TTS 语音合成 API，支持基于视频时长智能裁剪文本并生成 MP3 音频
+- 新增智能提示词生成 API，基于图片内容自动生成视频生成提示词
+- 增强错误处理机制，改进 API 调用失败时的降级策略和用户提示
+- 扩展 Dashscope 集成能力，支持更多 AI 模型和功能组合
 
 ## 目录
 1. [项目概述](#项目概述)
@@ -39,7 +39,7 @@
 
 ## 项目概述
 
-这是一个基于 Next.js 构建的新闻网站，集成了阿里云 Dashscope AI 服务。项目提供了 AI 驱动的电商内容生成能力，包括商品文案生成、图像生成和视频生成功能。**最新更新**增加了视频下载、分享到短视频平台以及智能视觉分析功能，显著增强了整体的AI服务能力。
+这是一个基于 Next.js 构建的新闻网站，集成了阿里云 Dashscope AI 服务。项目提供了 AI 驱动的电商内容生成能力，包括商品文案生成、图像生成和视频生成功能。**最新更新**显著增强了 AI 服务能力，新增了 TTS 语音合成和智能提示词生成功能，为用户提供更加丰富的 AI 创作工具。
 
 ### 主要特性
 
@@ -47,6 +47,7 @@
 - **多模态内容生成**：支持文本到图像、图像到视频的生成
 - **视频换人技术**：使用 wan2.2-animate-mix 模型实现视频中角色替换
 - **视觉分析功能**：基于 qwen-vl-max 模型分析图片内容生成智能提示词和视频风格
+- **智能语音合成**：支持基于视频时长的文本裁剪和 MP3 音频生成
 - **实时进度监控**：提供异步任务的状态查询和进度跟踪
 - **历史记录管理**：持久化保存用户的生成历史和结果
 - **视频下载功能**：支持直接下载生成的AI视频文件
@@ -68,6 +69,7 @@ UI[用户界面]
 API[API 调用层]
 DOWNLOAD[下载功能]
 SHARE[分享功能]
+TTS[语音合成]
 end
 subgraph "应用层"
 DESC[文案生成服务]
@@ -76,6 +78,7 @@ UPLOAD[文件上传服务]
 HISTORY[历史记录服务]
 ANALYZE[视觉分析服务]
 PROMPT[提示词生成服务]
+TRANSLATE[翻译服务]
 end
 subgraph "AI 服务层"
 DASHSCOPE[Dashscope API]
@@ -84,6 +87,7 @@ QWEN_VL[通义视觉模型 qwen-vl-max]
 WANXIANG[通义万相模型]
 WAN22[wan2.2-animate-mix]
 WANX1[wanx2.1-i2v-turbo]
+TTS_MODEL[TTS 语音模型]
 end
 subgraph "数据存储层"
 MEMORY[内存存储]
@@ -95,14 +99,18 @@ API --> DESC
 API --> VIDEO
 API --> ANALYZE
 API --> PROMPT
+API --> TRANSLATE
+API --> TTS
 API --> UPLOAD
 API --> HISTORY
 DOWNLOAD --> VIDEO
 SHARE --> VIDEO
+TTS --> TTS_MODEL
 DESC --> DASHSCOPE
 VIDEO --> DASHSCOPE
 ANALYZE --> DASHSCOPE
 PROMPT --> DASHSCOPE
+TRANSLATE --> DASHSCOPE
 DASHSCOPE --> QWEN
 DASHSCOPE --> QWEN_VL
 DASHSCOPE --> WANXIANG
@@ -117,6 +125,7 @@ UPLOAD --> DISK
 - [lib/aliyun/dashscope.ts:1-191](file://lib/aliyun/dashscope.ts#L1-L191)
 - [app/api/ai-lab/generate-desc/route.ts:1-26](file://app/api/ai-lab/generate-desc/route.ts#L1-L26)
 - [app/api/ai-lab/generate-video/route.ts:1-88](file://app/api/ai-lab/generate-video/route.ts#L1-L88)
+- [app/api/ai-lab/generate-tts/route.ts:1-93](file://app/api/ai-lab/generate-tts/route.ts#L1-L93)
 - [app/ai-lab/product-swap/page.tsx:740-809](file://app/ai-lab/product-swap/page.tsx#L740-L809)
 
 ### 技术栈组成
@@ -126,8 +135,9 @@ UPLOAD --> DISK
 | 前端框架 | Next.js | 16.1.6 |
 | AI 模型 | Dashscope | 通义千问/Qwen |
 | 视觉分析 | 通义视觉模型 | qwen-vl-max |
-| 视频生成 | 通义万相模型 | wanx2.1-i2v-turbo |
+| 视频生成 | 通义万相模型 | wanx2.1-i2v-turbo/wan2.6-i2v-flash |
 | 视频换人 | 通义万相模型 | wan2.2-animate-mix |
+| 语音合成 | MsEdgeTTS | 本地 TTS 引擎 |
 | 数据存储 | 内存 Map + 文件系统 | - |
 | 开发语言 | TypeScript | - |
 
@@ -138,7 +148,7 @@ UPLOAD --> DISK
 
 ### Dashscope 客户端封装
 
-Dashscope 的核心功能通过一个统一的客户端进行封装，现在支持多种 AI 服务能力，包括新增的视频下载、分享和视觉分析功能：
+Dashscope 的核心功能通过一个统一的客户端进行封装，现在支持多种 AI 服务能力，包括新增的 TTS 语音合成和智能提示词生成功能：
 
 ```mermaid
 classDiagram
@@ -253,6 +263,35 @@ end
 - [lib/aliyun/dashscope.ts:117-191](file://lib/aliyun/dashscope.ts#L117-L191)
 - [lib/aliyun/dashscope.ts:215-262](file://lib/aliyun/dashscope.ts#L215-L262)
 
+### TTS 语音合成组件
+
+新增的 TTS 语音合成功能支持基于视频时长智能裁剪文本并生成高质量的 MP3 音频：
+
+```mermaid
+flowchart TD
+Start([开始语音合成]) --> Validate[验证输入参数]
+Validate --> ValidInput{参数有效?}
+ValidInput --> |否| Error[返回错误信息]
+ValidInput --> |是| CleanText[清理文本内容]
+CleanText --> TrimText[按视频时长裁剪文本]
+TrimText --> SetVoice[设置语音参数]
+SetVoice --> GenerateAudio[生成音频流]
+GenerateAudio --> CollectData[收集音频数据]
+CollectData --> CheckResult{生成成功?}
+CheckResult --> |否| Error
+CheckResult --> |是| ReturnAudio[返回音频文件]
+Error --> End([结束])
+ReturnAudio --> End
+```
+
+**更新** 新增 TTS 语音合成 API，支持智能文本裁剪和 MP3 音频生成
+
+**图表来源**
+- [app/api/ai-lab/generate-tts/route.ts:36-93](file://app/api/ai-lab/generate-tts/route.ts#L36-L93)
+
+**章节来源**
+- [app/api/ai-lab/generate-tts/route.ts:1-93](file://app/api/ai-lab/generate-tts/route.ts#L1-L93)
+
 ### 下载和分享功能
 
 新增的下载和分享功能为用户提供了更便捷的内容获取和传播方式：
@@ -301,6 +340,7 @@ FileDownload --> Complete
 | 查询状态 | GET | `/api/ai-lab/generate-video/status` | 查询视频生成进度 |
 | 历史记录 | GET/POST | `/api/ai-lab/history` | 获取和保存生成历史 |
 | 生成提示词 | POST | `/api/ai-lab/generate-prompt` | 基于图片智能生成视频提示词 |
+| 语音合成 | POST | `/api/ai-lab/generate-tts` | 生成语音配音文件 |
 
 ### 请求响应规范
 
@@ -333,12 +373,22 @@ FileDownload --> Complete
 }
 ```
 
-**更新** 新增提示词生成API，支持基于图片内容智能生成视频生成提示词
+#### 语音合成请求示例
+```json
+{
+  "text": "这是一段需要生成语音的文本内容",
+  "duration": 10,
+  "voice": "zh-CN-XiaoxiaoNeural"
+}
+```
+
+**更新** 新增语音合成 API，支持智能文本裁剪和 MP3 音频生成
 
 **章节来源**
 - [app/api/ai-lab/generate-desc/route.ts:6-25](file://app/api/ai-lab/generate-desc/route.ts#L6-L25)
 - [app/api/ai-lab/generate-video/route.ts:30-88](file://app/api/ai-lab/generate-video/route.ts#L30-L88)
 - [app/api/ai-lab/generate-prompt/route.ts:6-23](file://app/api/ai-lab/generate-prompt/route.ts#L6-L23)
+- [app/api/ai-lab/generate-tts/route.ts:36-93](file://app/api/ai-lab/generate-tts/route.ts#L36-L93)
 
 ## 数据流分析
 
@@ -409,30 +459,38 @@ F[下载错误] --> F1[视频下载失败]
 F --> F2[文件格式不支持]
 G[分享错误] --> G1[平台连接失败]
 G --> G2[分享参数错误]
+H[TTS错误] --> H1[文本裁剪失败]
+H --> H2[音频生成失败]
+H --> H3[语音参数无效]
 end
 subgraph "处理策略"
-H[重试机制] --> H1[指数退避]
-I[降级处理] --> I1[本地缓存]
-J[用户提示] --> J1[友好错误信息]
-K[日志记录] --> K1[详细错误日志]
-L[回滚机制] --> L1[撤销部分操作]
+I[重试机制] --> I1[指数退避]
+J[降级处理] --> J1[本地缓存]
+K[用户提示] --> K1[友好错误信息]
+L[日志记录] --> L1[详细错误日志]
+M[回滚机制] --> M1[撤销部分操作]
+N[默认值返回] --> N1[基础功能可用]
 end
-A1 --> K
-B1 --> H
-C1 --> J
-C2 --> J
-C3 --> J
-D1 --> I
-D2 --> I
-E1 --> H
-E2 --> I
-F1 --> H
-F2 --> J
-G1 --> H
-G2 --> J
+A1 --> L
+B1 --> I
+C1 --> K
+C2 --> K
+C3 --> K
+D1 --> J
+D2 --> J
+E1 --> I
+E2 --> J
+F1 --> I
+F2 --> K
+G1 --> I
+G2 --> K
+H1 --> J
+H2 --> I
+H3 --> K
+I --> N
 ```
 
-**更新** 新增下载和分享功能的错误处理机制
+**更新** 新增 TTS 语音合成的错误处理机制，改进 API 调用失败时的降级策略
 
 ### 错误恢复策略
 
@@ -446,10 +504,14 @@ G2 --> J
 | 视觉分析失败 | 使用基础文案模板 | 保证功能可用 |
 | 视频下载失败 | 提供外链下载 | 需要手动操作 |
 | 分享平台失败 | 显示平台列表 | 用户可手动分享 |
+| 文本裁剪失败 | 使用原始文本 | 保证音频生成 |
+| 音频生成失败 | 返回空音频 | 用户可重试 |
+| 语音参数无效 | 使用默认参数 | 保证基本功能 |
 
 **章节来源**
 - [app/api/ai-lab/generate-desc/route.ts:18-24](file://app/api/ai-lab/generate-desc/route.ts#L18-L24)
 - [app/api/ai-lab/generate-video/route.ts:80-86](file://app/api/ai-lab/generate-video/route.ts#L80-L86)
+- [app/api/ai-lab/generate-tts/route.ts:85-92](file://app/api/ai-lab/generate-tts/route.ts#L85-L92)
 
 ## 性能优化策略
 
@@ -463,8 +525,9 @@ G2 --> J
 | 配置缓存 | 模型参数 | 应用启动 | 进程生命周期 |
 | 视频分析缓存 | 视觉分析结果 | 临时缓存 | 5分钟 |
 | 提示词缓存 | 智能提示词 | 临时缓存 | 10分钟 |
+| TTS缓存 | 生成的音频 | 按需清理 | 30分钟 |
 
-**更新** 新增视频分析和提示词的缓存策略
+**更新** 新增 TTS 语音合成的缓存策略，提升音频生成效率
 
 ### 并发控制
 
@@ -480,6 +543,7 @@ E --> E2[wanx2.1-i2v-turbo优先级中]
 E --> E3[qwen-vl-max优先级低]
 E --> E4[下载任务优先级中]
 E --> E5[分享任务优先级低]
+E --> E6[TTS任务优先级中]
 end
 subgraph "优化效果"
 F[响应时间] --> F1[减少50%]
@@ -489,7 +553,7 @@ I[资源利用率] --> I1[提升25%]
 end
 ```
 
-**更新** 新增下载和分享任务的优先级调度
+**更新** 新增 TTS 语音合成任务的优先级调度，优化整体系统性能
 
 ### 性能监控指标
 
@@ -503,6 +567,8 @@ end
 | 视觉分析准确率 | >92% | 专门监控 | <88% |
 | 下载成功率 | >95% | 专门监控 | <90% |
 | 分享成功率 | >90% | 专门监控 | <85% |
+| TTS生成成功率 | >95% | 专门监控 | <90% |
+| 文本裁剪准确率 | >98% | 专门监控 | <95% |
 
 ## 部署与配置
 
@@ -518,8 +584,9 @@ end
 | ENABLE_VISUAL_ANALYSIS | 否 | true | 是否启用视觉分析功能 |
 | ENABLE_DOWNLOAD_FEATURE | 否 | true | 是否启用下载功能 |
 | ENABLE_SHARE_FEATURE | 否 | true | 是否启用分享功能 |
+| ENABLE_TTS_FEATURE | 否 | true | 是否启用语音合成功能 |
 
-**更新** 新增下载和分享功能的开关配置
+**更新** 新增 TTS 语音合成功能的开关配置
 
 ### 部署步骤
 
@@ -534,6 +601,7 @@ end
    export ENABLE_VISUAL_ANALYSIS=true
    export ENABLE_DOWNLOAD_FEATURE=true
    export ENABLE_SHARE_FEATURE=true
+   export ENABLE_TTS_FEATURE=true
    ```
 
 2. **构建应用**
@@ -580,8 +648,11 @@ CMD ["npm", "start"]
 | 视觉分析失败 | 视频内容质量差 | 重新拍摄或选择更清晰的视频 |
 | 视频下载失败 | 浏览器安全设置 | 检查浏览器下载权限 |
 | 分享平台失败 | 平台维护或参数错误 | 重新尝试或检查平台状态 |
+| TTS生成失败 | 文本内容为空 | 检查输入文本的有效性 |
+| 文本裁剪异常 | 时长参数无效 | 确保时长参数为正数 |
+| 音频格式错误 | 语音参数不支持 | 使用支持的语音模型 |
 
-**更新** 新增下载和分享功能相关的故障排除指南
+**更新** 新增 TTS 语音合成相关的故障排除指南
 
 ### 调试工具
 
@@ -605,6 +676,9 @@ J --> J3[测试浏览器兼容性]
 K[分享功能调试] --> K1[检查平台连接]
 K --> K2[验证分享参数]
 K --> K3[测试平台API]
+L[TTS功能调试] --> L1[检查文本内容]
+L --> L2[验证时长参数]
+L --> L3[测试语音模型]
 ```
 
 ### 监控告警
@@ -619,13 +693,15 @@ K --> K3[测试平台API]
 | 视觉分析准确率 | >92% | <88% | 优化提示词和输入质量 |
 | 下载成功率 | >95% | <90% | 检查文件权限和浏览器设置 |
 | 分享成功率 | >90% | <85% | 检查平台API和参数配置 |
+| TTS生成成功率 | >95% | <90% | 检查文本质量和语音参数 |
+| 文本裁剪准确率 | >98% | <95% | 验证时长参数和文本格式 |
 
 **章节来源**
 - [app/api/ai-lab/generate-video/status/route.ts:76-86](file://app/api/ai-lab/generate-video/status/route.ts#L76-L86)
 
 ## 总结
 
-本项目成功集成了阿里云 Dashscope AI 服务，实现了完整的 AI 内容生成解决方案。**最新更新**显著增强了AI内容分析能力和视频生成选项，通过新增的下载功能、分享功能以及智能视觉分析能力，为用户提供了更加丰富和便捷的 AI 服务体验。
+本项目成功集成了阿里云 Dashscope AI 服务，实现了完整的 AI 内容生成解决方案。**最新更新**显著增强了 AI 内容分析能力和视频生成选项，通过新增的 TTS 语音合成、智能提示词生成以及下载和分享功能，为用户提供了更加丰富和便捷的 AI 服务体验。
 
 ### 主要成就
 
@@ -634,9 +710,10 @@ K --> K3[测试平台API]
 3. **视觉分析能力**：基于 qwen-vl-max 模型实现视频内容智能分析，生成精准推广文案
 4. **智能提示词生成**：支持基于图片内容自动生成高质量视频生成提示词
 5. **视频风格分析**：能够分析原始视频的视觉风格并增强生成效果
-6. **用户体验增强**：提供了视频下载和多平台分享功能，极大提升了用户便利性
-7. **系统稳定性**：建立了完善的错误处理和监控机制
-8. **性能优化**：通过缓存和并发控制提升了系统性能
+6. **语音合成服务**：新增 TTS 语音合成功能，支持智能文本裁剪和 MP3 音频生成
+7. **用户体验增强**：提供了视频下载和多平台分享功能，极大提升了用户便利性
+8. **系统稳定性**：建立了完善的错误处理和监控机制
+9. **性能优化**：通过缓存和并发控制提升了系统性能
 
 ### 未来改进方向
 
@@ -648,3 +725,5 @@ K --> K3[测试平台API]
 6. **个性化定制**：基于用户偏好和历史行为，提供个性化的 AI 内容生成建议
 7. **平台生态**：扩展更多短视频平台的分享支持，覆盖更广泛的用户群体
 8. **下载优化**：支持多种视频格式和分辨率的下载，满足不同平台的发布需求
+9. **语音增强**：支持更多语音模型和音色选择，提升语音合成质量
+10. **智能优化**：基于用户反馈自动优化提示词生成和文本裁剪算法

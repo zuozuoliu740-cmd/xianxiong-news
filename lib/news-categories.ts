@@ -1,3 +1,11 @@
+/**
+ * @module lib/news-categories
+ * @description 新闻分类定义 + 分类列表常量（供前端 Tab 消费）
+ * @created 2026-03-22
+ * @author 先雄新闻团队
+ * @dependencies 无外部依赖
+ */
+
 export interface NewsCategory {
   id: string;
   label: string;

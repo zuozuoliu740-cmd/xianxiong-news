@@ -568,7 +568,25 @@ export default function ProductSwapPage() {
                       className={`relative flex h-40 cursor-pointer items-center justify-center overflow-hidden ${v.videoUrl ? 'bg-black' : `bg-gradient-to-br ${GRADIENTS[vi % GRADIENTS.length]}`}`}
                     >
                       {v.videoUrl ? (
-                        <video src={v.videoUrl} className="h-full w-full object-cover" preload="metadata" muted playsInline />
+                        <video
+                          src={`${v.videoUrl}${v.videoUrl.includes('?') ? '' : '#t=0.5'}`}
+                          className="h-full w-full object-cover"
+                          preload="metadata"
+                          muted
+                          playsInline
+                          onError={(e) => {
+                            const el = e.currentTarget;
+                            el.style.display = 'none';
+                            const parent = el.parentElement;
+                            if (parent && !parent.querySelector('.video-expired-tip')) {
+                              const tip = document.createElement('div');
+                              tip.className = 'video-expired-tip';
+                              tip.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;';
+                              tip.innerHTML = '<svg width="28" height="28" fill="none" stroke="rgba(255,255,255,0.4)" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><span style="font-size:10px;color:rgba(255,255,255,0.4)">\u94FE\u63A5\u5DF2\u8FC7\u671F</span>';
+                              parent.appendChild(tip);
+                            }
+                          }}
+                        />
                       ) : (
                         <svg className="h-10 w-10 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                       )}

@@ -1,0 +1,922 @@
+// 主题色 - 深色主题
+$primary: #a78bfa;
+$primary-light: #c4b5fd;
+$primary-dark: #7c3aed;
+$gradient: linear-gradient(135deg, #7c3aed, #ec4899);
+$gradient-btn: linear-gradient(135deg, #7c3aed, #a855f7);
+$blue: #60a5fa;
+$green: #34d399;
+$red: #f87171;
+$orange: #fb923c;
+$bg-page: #0f0f1a;
+$bg-card: #1a1a2e;
+$bg-input: #16162a;
+$bg-elevated: #222240;
+$border-color: #2d2d44;
+$border-light: #252540;
+$text-primary: #e5e7eb;
+$text-secondary: #9ca3af;
+$text-muted: #6b7280;
+$text-dim: #4b5563;
+$white: #ffffff;
+$shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+$shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.2);
+$radius: 16px;
+$radius-sm: 12px;
+$radius-xs: 8px;
+
+.page-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.page {
+  flex: 1;
+  background: $bg-page;
+  padding-bottom: 20px;
+}
+
+// ============ Bottom Bar ============
+.bottom-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px 0;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  background: $bg-card;
+  border-top: 1px solid $border-color;
+}
+
+.bottom-bar-icon {
+  font-size: 28px;
+}
+
+.bottom-bar-text {
+  font-size: 28px;
+  font-weight: 500;
+  color: $primary;
+}
+
+// ============ Steps Bar ============
+.steps-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 40px 12px;
+  background: $bg-card;
+}
+
+.step-item {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  position: relative;
+  flex: 1;
+}
+
+.step-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $border-color;
+  color: $text-muted;
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  transition: all 0.3s;
+
+  &.done {
+    background: $gradient;
+    color: $white;
+  }
+  &.active {
+    background: transparent;
+    border: 2.5px solid $primary;
+    color: $primary;
+  }
+  &.current {
+    background: $gradient;
+    color: $white;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.step-check {
+  font-size: 22px;
+  color: $white;
+}
+
+.step-label {
+  font-size: 20px;
+  color: $text-muted;
+  &.done { color: $primary; font-weight: 500; }
+  &.active { color: $primary; font-weight: 500; }
+}
+
+.step-line {
+  position: absolute;
+  right: -40%;
+  top: 22px;
+  width: 80%;
+  height: 3px;
+  background: $border-color;
+  border-radius: 2px;
+  &.done { background: $gradient; }
+}
+
+// ============ Page Header Bar ============
+.page-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 16px 24px;
+  padding: 18px 24px;
+  background: $bg-card;
+  border-radius: $radius-sm;
+  border: 1px solid $border-color;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-icon {
+  font-size: 28px;
+}
+
+.header-label {
+  font-size: 28px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px;
+  background: rgba(124, 58, 237, 0.1);
+  border-radius: 8px;
+}
+
+.header-history {
+  font-size: 24px;
+  color: $primary;
+  font-weight: 500;
+}
+
+.header-arrow {
+  font-size: 28px;
+  color: $primary;
+  font-weight: 700;
+}
+
+// ============ Error Banner ============
+.error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 24px 16px;
+  padding: 16px 20px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: $radius-xs;
+}
+
+.error-text {
+  flex: 1;
+  font-size: 24px;
+  color: $red;
+}
+
+.error-close {
+  font-size: 28px;
+  color: $text-muted;
+  padding: 4px 8px;
+}
+
+// ============ Cards ============
+.workspace {
+  padding: 0 24px;
+}
+
+.card {
+  background: $bg-card;
+  border-radius: $radius;
+  padding: 24px;
+  margin-bottom: 16px;
+  border: 1px solid $border-color;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.card-title {
+  font-size: 28px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.card-hint {
+  font-size: 22px;
+  color: $text-muted;
+}
+
+// ============ Type Grid ============
+.type-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.type-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 8px;
+  border-radius: $radius-sm;
+  background: $bg-input;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+
+  &.active {
+    background: rgba(124, 58, 237, 0.12);
+    border-color: $primary;
+    box-shadow: 0 0 12px rgba(124, 58, 237, 0.15);
+  }
+}
+
+.type-icon {
+  font-size: 36px;
+  margin-bottom: 6px;
+}
+
+.type-label {
+  font-size: 22px;
+  color: $text-secondary;
+  font-weight: 500;
+  .type-btn.active & { color: $primary; }
+}
+
+// ============ Upload Area ============
+.upload-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 44px 24px;
+  border: 2px dashed rgba(167, 139, 250, 0.2);
+  border-radius: $radius-sm;
+  background: $bg-input;
+  transition: border-color 0.2s;
+
+  &:active {
+    border-color: rgba(167, 139, 250, 0.4);
+  }
+}
+
+.upload-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.upload-text {
+  font-size: 28px;
+  color: $text-secondary;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.upload-hint {
+  font-size: 22px;
+  color: $text-muted;
+}
+
+// ============ Video Preview ============
+.video-preview {
+  position: relative;
+  border-radius: $radius-sm;
+  overflow: hidden;
+}
+
+.preview-video {
+  width: 100%;
+  height: 360px;
+  border-radius: $radius-sm;
+}
+
+.remove-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: $white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  z-index: 2;
+}
+
+.upload-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: $radius-sm;
+}
+
+.loading-text {
+  color: $white;
+  font-size: 28px;
+  font-weight: 500;
+}
+
+// ============ Image Grid ============
+.image-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.image-item {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: $radius-xs;
+  overflow: hidden;
+}
+
+.image-thumb {
+  width: 100%;
+  height: 100%;
+  border-radius: $radius-xs;
+}
+
+.remove-btn-sm {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: $white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  z-index: 2;
+}
+
+.image-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border: 2px dashed rgba(167, 139, 250, 0.2);
+  border-radius: $radius-xs;
+  background: $bg-input;
+  transition: border-color 0.2s;
+
+  &:active {
+    border-color: rgba(167, 139, 250, 0.4);
+  }
+}
+
+.add-icon {
+  font-size: 44px;
+  color: $text-muted;
+  line-height: 1;
+}
+
+.add-text {
+  font-size: 20px;
+  color: $text-muted;
+  margin-top: 4px;
+}
+
+// ============ Textarea ============
+.textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 16px;
+  border: 1px solid $border-color;
+  border-radius: $radius-xs;
+  font-size: 26px;
+  color: $text-primary;
+  background: $bg-input;
+  box-sizing: border-box;
+  line-height: 1.6;
+
+  &.textarea-sm {
+    min-height: 80px;
+    margin-top: 12px;
+  }
+}
+
+// ============ Prompt Actions ============
+.prompt-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.prompt-tip {
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: rgba(124, 58, 237, 0.08);
+  border-radius: $radius-xs;
+  font-size: 22px;
+  color: $primary;
+}
+
+// ============ Duration ============
+.duration-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.duration-btn {
+  flex: 1;
+  text-align: center;
+  padding: 16px 0;
+  border: 2px solid $border-color;
+  border-radius: $radius-xs;
+  font-size: 26px;
+  color: $text-secondary;
+  background: $bg-card;
+  transition: all 0.2s;
+
+  &.active {
+    border-color: $primary;
+    color: $primary;
+    background: rgba(124, 58, 237, 0.1);
+    font-weight: 500;
+  }
+}
+
+.custom-duration {
+  display: flex;
+  align-items: center;
+  margin-top: 12px;
+  gap: 8px;
+}
+
+.duration-input {
+  width: 120px;
+  height: 60px;
+  text-align: center;
+  border: 1px solid $border-color;
+  border-radius: $radius-xs;
+  font-size: 28px;
+  color: $text-primary;
+}
+
+.duration-unit {
+  font-size: 24px;
+  color: $text-muted;
+}
+
+// ============ Switch Toggle ============
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.switch-toggle {
+  width: 80px;
+  height: 44px;
+  border-radius: 22px;
+  background: $border-color;
+  position: relative;
+  transition: background 0.3s;
+  flex-shrink: 0;
+
+  &.on {
+    background: $primary;
+    .switch-thumb {
+      transform: translateX(36px);
+    }
+  }
+}
+
+.switch-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: $white;
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  transition: transform 0.3s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.switch-label {
+  font-size: 26px;
+  color: $text-primary;
+  flex: 1;
+}
+
+.switch-tip {
+  font-size: 22px;
+  color: $text-muted;
+  margin-top: 8px;
+}
+
+// ============ English Section ============
+.english-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid $border-light;
+}
+
+// ============ Buttons ============
+.btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 24px;
+  background: $gradient-btn;
+  color: $white;
+  border-radius: $radius-xs;
+  font-size: 26px;
+  font-weight: 500;
+
+  &.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+}
+
+.btn-outline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 24px;
+  background: $bg-card;
+  color: $primary;
+  border: 1px solid rgba(167, 139, 250, 0.25);
+  border-radius: $radius-xs;
+  font-size: 26px;
+  font-weight: 500;
+}
+
+.btn-blue {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  background: $blue;
+  color: $white;
+  border-radius: 6px;
+  font-size: 22px;
+
+  &.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+}
+
+.btn-xs {
+  padding: 8px 16px;
+  font-size: 22px;
+  border-radius: 6px;
+}
+
+.btn-sm {
+  padding: 12px 20px;
+  font-size: 24px;
+}
+
+// ============ Generate Button ============
+.generate-btn {
+  margin: 8px 0 16px;
+  padding: 24px;
+  background: $gradient;
+  border-radius: $radius;
+  text-align: center;
+  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.35);
+  transition: transform 0.2s, box-shadow 0.2s;
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  &.disabled {
+    opacity: 0.45;
+    box-shadow: none;
+  }
+}
+
+.gen-text {
+  color: $white;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+// ============ Progress ============
+.progress-card {
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  background: rgba(124, 58, 237, 0.06);
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.progress-label {
+  font-size: 26px;
+  color: $text-secondary;
+}
+
+.progress-pct {
+  font-size: 28px;
+  font-weight: 600;
+  color: $primary;
+}
+
+.progress-bar {
+  height: 10px;
+  background: $border-color;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: $gradient;
+  border-radius: 5px;
+  transition: width 0.5s ease;
+}
+
+// ============ Result Card ============
+.result-card {
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  background: rgba(52, 211, 153, 0.06);
+}
+
+.result-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: $green;
+  margin-bottom: 16px;
+}
+
+.result-video-wrap {
+  position: relative;
+  border-radius: $radius-sm;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.result-video {
+  width: 100%;
+  height: 400px;
+}
+
+.result-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 4px 12px;
+  background: $gradient;
+  border-radius: 6px;
+  font-size: 20px;
+  color: $white;
+}
+
+.result-actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 16px;
+
+  .btn-primary, .btn-outline {
+    flex: 1;
+  }
+}
+
+// ============ Voiceover ============
+.voiceover-section {
+  margin-top: 16px;
+  padding: 16px;
+  background: $bg-input;
+  border-radius: $radius-xs;
+}
+
+.voiceover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.voiceover-title {
+  font-size: 28px;
+  font-weight: 500;
+  color: $text-primary;
+}
+
+.voiceover-loading {
+  font-size: 24px;
+  color: $text-muted;
+  margin-top: 8px;
+}
+
+.voiceover-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.voiceover-done {
+  font-size: 24px;
+  color: $green;
+}
+
+// ============ History Panel ============
+.history-panel {
+  padding: 0 24px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px;
+}
+
+.empty-icon {
+  font-size: 80px;
+  margin-bottom: 16px;
+}
+
+.empty-text {
+  font-size: 30px;
+  color: $text-secondary;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.empty-sub {
+  font-size: 24px;
+  color: $text-muted;
+}
+
+// ============ History Cards ============
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.history-card {
+  display: flex;
+  background: $bg-card;
+  border-radius: $radius;
+  overflow: hidden;
+  border: 1px solid $border-color;
+}
+
+.history-thumb {
+  width: 240px;
+  min-height: 180px;
+  position: relative;
+  flex-shrink: 0;
+  background: $bg-input;
+}
+
+.thumb-video {
+  width: 100%;
+  height: 100%;
+}
+
+.thumb-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  background: $bg-input;
+}
+
+.thumb-duration {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  padding: 2px 8px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 4px;
+  font-size: 20px;
+  color: $white;
+}
+
+.thumb-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 18px;
+  color: $white;
+
+  &.processing {
+    background: $orange;
+  }
+}
+
+.history-info {
+  flex: 1;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.history-title {
+  font-size: 28px;
+  font-weight: 500;
+  color: $text-primary;
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-desc {
+  font-size: 22px;
+  color: $text-muted;
+  margin-bottom: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.type-tag {
+  font-size: 20px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(167, 139, 250, 0.12);
+  color: $primary;
+
+  &.i2v { background: rgba(236, 72, 153, 0.12); color: #ec4899; }
+  &.clothing { background: rgba(96, 165, 250, 0.12); color: $blue; }
+  &.model { background: rgba(52, 211, 153, 0.12); color: $green; }
+}
+
+.meta-date {
+  font-size: 20px;
+  color: $text-muted;
+}
+
+.history-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: auto;
+}

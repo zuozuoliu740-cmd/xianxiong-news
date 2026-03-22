@@ -1,3 +1,11 @@
+/**
+ * @module components/SearchBar
+ * @description 新闻搜索栏组件
+ * @created 2026-03-22
+ * @author 先雄新闻团队
+ * @dependencies react
+ */
+
 "use client";
 
 import { useState } from "react";

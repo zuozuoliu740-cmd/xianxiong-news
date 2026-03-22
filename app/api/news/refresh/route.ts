@@ -1,5 +1,13 @@
+/**
+ * @module api/news/refresh/route
+ * @description 缓存刷新 API —— 手动清除新闻缓存（支持 POST/GET）
+ * @created 2026-03-22
+ * @author 先雄新闻团队
+ * @dependencies lib/scraper (clearSourceCache)
+ */
+
 import { NextRequest, NextResponse } from "next/server";
-import { clearSourceCache } from "@/lib/news-scraper";
+import { clearSourceCache } from "@/lib/scraper";
 
 // 强制动态渲染，禁止 Next.js 静态缓存
 export const dynamic = "force-dynamic";

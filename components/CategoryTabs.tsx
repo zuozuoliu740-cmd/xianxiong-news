@@ -1,3 +1,11 @@
+/**
+ * @module components/CategoryTabs
+ * @description 新闻分类 Tab 标签栏组件
+ * @created 2026-03-22
+ * @author 先雄新闻团队
+ * @dependencies lib/news-categories
+ */
+
 "use client";
 
 import { NEWS_CATEGORIES } from "@/lib/news-categories";

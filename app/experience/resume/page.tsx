@@ -50,7 +50,7 @@ export default function ResumePage() {
                 刘鹏飞
               </h1>
               <div className="mb-[15px] text-lg font-light tracking-[1px] text-white/90">
-                高级产品专家
+                负责钉钉商业伙伴
               </div>
               <div className="flex flex-wrap gap-[25px] text-sm text-white/85 max-md:justify-center">
                 <div className="flex items-center gap-1.5">

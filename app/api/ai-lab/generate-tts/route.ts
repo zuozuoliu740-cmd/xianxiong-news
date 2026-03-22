@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
+import { writeFile, mkdir } from "fs/promises";
+import { existsSync } from "fs";
+import path from "path";
+import { v4 as uuidv4 } from "uuid";
 
 export const runtime = "nodejs";
 
@@ -35,7 +39,7 @@ function trimTextForDuration(text: string, durationSec: number): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const { text, duration = 10, voice = "zh-CN-XiaoxiaoNeural" } = await req.json();
+    const { text, duration = 10, voice = "zh-CN-XiaoxiaoNeural", returnUrl = false } = await req.json();
 
     if (!text || typeof text !== "string") {
       return NextResponse.json({ error: "缺少配音文本" }, { status: 400 });
@@ -74,6 +78,25 @@ export async function POST(req: NextRequest) {
     }
 
     console.log(`[TTS] 生成完成: ${audioBuffer.length} bytes`);
+
+    // 小程序模式：保存文件并返回URL
+    if (returnUrl) {
+      const ttsDir = path.join(process.cwd(), "public", "uploads", "tts");
+      if (!existsSync(ttsDir)) {
+        await mkdir(ttsDir, { recursive: true });
+      }
+      const fileName = `${uuidv4()}.mp3`;
+      const filePath = path.join(ttsDir, fileName);
+      await writeFile(filePath, audioBuffer);
+      const url = `/uploads/tts/${fileName}`;
+      console.log(`[TTS] 已保存文件: ${url}`);
+      return NextResponse.json({
+        success: true,
+        url,
+        text: trimmedText,
+        size: audioBuffer.length,
+      });
+    }
 
     return new Response(audioBuffer, {
       headers: {

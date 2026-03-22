@@ -1,5 +1,10 @@
 /**
- * 微软 Edge 翻译 API（免费、无需注册）
+ * @module lib/translator
+ * @description 微软 Edge 翻译 API 对接（免费、无需注册），提供英译中能力
+ * @created 2026-03-22
+ * @author 先雄新闻团队
+ * @dependencies 无外部依赖
+ *
  * 原理：借用 Edge 浏览器翻译功能的公开 Token 端点
  * Token 有效期约 10 分钟，超过后自动刷新
  */

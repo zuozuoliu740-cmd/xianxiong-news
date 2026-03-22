@@ -1,3 +1,11 @@
+/**
+ * @module lib/bocha-search
+ * @description 博查AI搜索 API 对接，提供热搜新闻检索能力
+ * @created 2026-03-22
+ * @author 先雄新闻团队
+ * @dependencies lib/brave-search (NewsItem)
+ */
+
 import type { NewsItem } from "./brave-search";
 
 const BOCHA_API_KEY = process.env.BOCHA_API_KEY || "";

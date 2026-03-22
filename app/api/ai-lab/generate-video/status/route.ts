@@ -2,8 +2,71 @@ import { NextRequest, NextResponse } from "next/server";
 import { videoTasks } from "@/lib/video-tasks";
 import { queryVideoTask } from "@/lib/aliyun/dashscope";
 import { mergeAudioWithAiVideo } from "@/lib/ffmpeg-merge";
+import fs from "fs";
+import path from "path";
+import https from "https";
+import http from "http";
 
 export const runtime = "nodejs";
+
+/**
+ * 下载远程视频到本地 uploads 目录，返回本地 URL 路径
+ * 避免 DashScope 临时签名 URL 过期导致视频无法播放
+ */
+async function downloadVideoToLocal(remoteUrl: string): Promise<string> {
+  const uploadsDir = path.join(process.cwd(), "public", "uploads", "videos");
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+
+  const timestamp = Date.now();
+  const localFileName = `result_${timestamp}.mp4`;
+  const localPath = path.join(uploadsDir, localFileName);
+
+  await new Promise<void>((resolve, reject) => {
+    const client = remoteUrl.startsWith("https") ? https : http;
+    const file = fs.createWriteStream(localPath);
+
+    const request = client.get(remoteUrl, (response) => {
+      if ((response.statusCode === 301 || response.statusCode === 302) && response.headers.location) {
+        file.close();
+        if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+        downloadVideoToLocal(response.headers.location).then(() => resolve()).catch(reject);
+        return;
+      }
+      if (response.statusCode !== 200) {
+        file.close();
+        if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+        reject(new Error(`下载失败: HTTP ${response.statusCode}`));
+        return;
+      }
+      response.pipe(file);
+      file.on("finish", () => { file.close(); resolve(); });
+    });
+
+    request.on("error", (err) => {
+      file.close();
+      if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+      reject(err);
+    });
+
+    request.setTimeout(120000, () => {
+      request.destroy();
+      if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+      reject(new Error("视频下载超时"));
+    });
+  });
+
+  // 验证文件有效性
+  if (!fs.existsSync(localPath) || fs.statSync(localPath).size < 1000) {
+    throw new Error("下载的视频文件无效");
+  }
+
+  const sizeMB = (fs.statSync(localPath).size / 1024 / 1024).toFixed(1);
+  console.log(`[status] 视频已下载到本地: ${localFileName} (${sizeMB}MB)`);
+
+  return `/uploads/videos/${localFileName}`;
+}
 
 /** 根据轮询次数估算进度百分比 */
 function estimateProgress(dsStatus: string, pollCount: number): number {
@@ -70,18 +133,35 @@ export async function GET(req: NextRequest) {
             task.resultUrl = mergedUrl;
             console.log(`[status] 音频合并完成: ${taskId}, 视频: ${mergedUrl}`);
           })
-          .catch((err) => {
-            console.error(`[status] 音频合并失败，使用原始AI视频:`, err);
-            task.status = "completed";
-            task.progress = 100;
-            task.resultUrl = dsResult.videoUrl;
+          .catch(async (err) => {
+            console.error(`[status] 音频合并失败，尝试下载原始AI视频到本地:`, err);
+            try {
+              const localUrl = await downloadVideoToLocal(dsResult.videoUrl!);
+              task.status = "completed";
+              task.progress = 100;
+              task.resultUrl = localUrl;
+            } catch {
+              task.status = "completed";
+              task.progress = 100;
+              task.resultUrl = dsResult.videoUrl;
+            }
           });
       } else if (!task.params.videoUrl) {
-        // 无原始视频（图生视频模式），直接完成
-        task.status = "completed";
-        task.progress = 100;
-        task.resultUrl = dsResult.videoUrl;
-        console.log(`[status] 任务完成: ${taskId}, 视频: ${dsResult.videoUrl}`);
+        // 无原始视频（图生视频模式），下载到本地后完成
+        task.progress = 95;
+        console.log(`[status] 图生视频完成，开始下载到本地: ${taskId}`);
+        try {
+          const localUrl = await downloadVideoToLocal(dsResult.videoUrl);
+          task.status = "completed";
+          task.progress = 100;
+          task.resultUrl = localUrl;
+          console.log(`[status] 任务完成（已保存本地）: ${taskId}, 视频: ${localUrl}`);
+        } catch (dlErr: any) {
+          console.error(`[status] 下载视频到本地失败，使用临时URL:`, dlErr.message);
+          task.status = "completed";
+          task.progress = 100;
+          task.resultUrl = dsResult.videoUrl;
+        }
       }
       // mergeStarted 但未完成时，保持 processing + 95% 状态，前端继续轮询
     } else if (dsResult.status === "FAILED") {

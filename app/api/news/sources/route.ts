@@ -1,5 +1,13 @@
+/**
+ * @module api/news/sources/route
+ * @description 新闻来源卡片数据 API —— 返回所有来源及其实时新闻
+ * @created 2026-03-22
+ * @author 先雄新闻团队
+ * @dependencies lib/scraper
+ */
+
 import { NextResponse } from "next/server";
-import { getNewsBySource, NEWS_SOURCES } from "@/lib/news-scraper";
+import { getNewsBySource, NEWS_SOURCES } from "@/lib/scraper";
 
 // 强制动态渲染，禁止 Next.js 静态缓存
 export const dynamic = "force-dynamic";

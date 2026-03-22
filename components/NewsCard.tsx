@@ -1,3 +1,11 @@
+/**
+ * @module components/NewsCard
+ * @description 单条新闻卡片组件 —— 展示标题、描述、来源、收藏按钮
+ * @created 2026-03-22
+ * @author 先雄新闻团队
+ * @dependencies react, lib/brave-search, lib/favorites
+ */
+
 "use client";
 
 import { useState, useEffect } from "react";

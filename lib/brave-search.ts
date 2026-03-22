@@ -1,3 +1,11 @@
+/**
+ * @module lib/brave-search
+ * @description Brave Search API 对接 + NewsItem 核心类型定义
+ * @created 2026-03-22
+ * @author 先雄新闻团队
+ * @dependencies 无外部依赖
+ */
+
 export interface NewsItem {
   id: string;
   title: string;

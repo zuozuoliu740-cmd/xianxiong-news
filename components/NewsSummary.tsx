@@ -1,3 +1,11 @@
+/**
+ * @module components/NewsSummary
+ * @description 新闻摘要组件 —— 展示新闻说明卡片
+ * @created 2026-03-22
+ * @author 先雄新闻团队
+ * @dependencies lib/brave-search (NewsItem)
+ */
+
 "use client";
 
 import { NewsItem } from "@/lib/brave-search";
